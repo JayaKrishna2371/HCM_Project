@@ -1,0 +1,72 @@
+/* ==========================================================================
+   HCM Platform — Global styles
+   ========================================================================== */
+
+:root {
+  --color-bg-deep: #050b1f;
+  --color-bg-mid: #0b1e3f;
+  --color-accent: #2f80ff;
+  --color-accent-bright: #4f9bff;
+  --color-card: rgba(15, 28, 56, 0.72);
+  --color-card-border: rgba(120, 170, 255, 0.18);
+  --color-text: #eaf0ff;
+  --color-text-muted: #9bb0d6;
+  --color-input-bg: rgba(255, 255, 255, 0.04);
+  --color-input-border: rgba(120, 170, 255, 0.22);
+  --color-input-border-focus: #4f9bff;
+  --color-danger: #ff6b6b;
+  --color-success: #34d399;
+  --shadow-card: 0 30px 80px rgba(0, 8, 30, 0.55);
+  --radius-card: 18px;
+  --radius-input: 10px;
+  --font-base: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-base);
+  color: var(--color-text);
+  background: var(--color-bg-deep);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--color-accent-bright);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: #82b8ff;
+}
+
+button {
+  font-family: inherit;
+}
+
+input,
+button {
+  outline: none;
+}
+
+/* Scrollbar polish */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 170, 255, 0.25);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
