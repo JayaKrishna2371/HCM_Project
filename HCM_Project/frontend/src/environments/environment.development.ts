@@ -9,15 +9,15 @@
 export const environment = {
   production: false,
 
-  apiBaseUrl: 'http://localhost:8000/api/v1',
+  apiBaseUrl: 'http://127.0.0.1:8000/api/v1',
 
   azure: {
-    tenantId: 'REPLACE_WITH_TENANT_ID',
-    clientId: 'REPLACE_WITH_CLIENT_ID',
+    tenantId: 'fc388343-6a22-4b5b-a32f-a6aa2320b0fb',
+    clientId: 'b643e0ac-2602-4281-8da2-1eaec09adc23',
     redirectUri: 'http://localhost:4200',
     postLogoutRedirectUri: 'http://localhost:4200',
     // Scope your backend will require on incoming access tokens
-    apiScope: 'api://REPLACE_WITH_CLIENT_ID/access_as_user',
+    apiScope: 'api://b643e0ac-2602-4281-8da2-1eaec09adc23/access_as_user',
   },
 
   session: {

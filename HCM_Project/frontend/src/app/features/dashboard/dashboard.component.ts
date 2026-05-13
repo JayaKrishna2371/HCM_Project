@@ -55,44 +55,46 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
             <h2>We couldn't load your profile.</h2>
             <p>{{ error() }}</p>
           </div>
-        } @else if (profile(); as p) {
-          <section class="welcome">
-            <h1>Welcome, {{ p.given_name ?? p.name ?? 'User' }} 👋</h1>
-            <p class="muted">Phase 1 · Authentication & Login Module — successfully signed in via Azure AD.</p>
-          </section>
+        } @else {
+          @if (profile(); as p) {
+            <section class="welcome">
+              <h1>Welcome, {{ p.given_name ?? p.name ?? 'User' }} 👋</h1>
+              <p class="muted">Phase 1 · Authentication & Login Module — successfully signed in via Azure AD.</p>
+            </section>
 
-          <section class="cards">
-            <div class="card">
-              <h3>Identity</h3>
-              <dl>
-                <dt>Name</dt><dd>{{ p.name ?? '—' }}</dd>
-                <dt>Email</dt><dd>{{ p.email ?? '—' }}</dd>
-                <dt>Azure OID</dt><dd class="mono">{{ p.azure_oid }}</dd>
-                <dt>Tenant</dt><dd class="mono">{{ p.tenant_id ?? '—' }}</dd>
-              </dl>
-            </div>
+            <section class="cards">
+              <div class="card">
+                <h3>Identity</h3>
+                <dl>
+                  <dt>Name</dt><dd>{{ p.name ?? '—' }}</dd>
+                  <dt>Email</dt><dd>{{ p.email ?? '—' }}</dd>
+                  <dt>Azure OID</dt><dd class="mono">{{ p.azure_oid }}</dd>
+                  <dt>Tenant</dt><dd class="mono">{{ p.tenant_id ?? '—' }}</dd>
+                </dl>
+              </div>
 
-            <div class="card">
-              <h3>Roles (RBAC)</h3>
-              @if (p.roles?.length) {
-                <ul class="roles">
-                  @for (r of p.roles; track r) {
-                    <li class="role-badge">{{ r }}</li>
-                  }
-                </ul>
-              } @else {
-                <p class="muted">No roles assigned.</p>
-              }
-            </div>
+              <div class="card">
+                <h3>Roles (RBAC)</h3>
+                @if (p.roles.length) {
+                  <ul class="roles">
+                    @for (r of p.roles; track r) {
+                      <li class="role-badge">{{ r }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="muted">No roles assigned.</p>
+                }
+              </div>
 
-            <div class="card">
-              <h3>Session</h3>
-              <dl>
-                <dt>Last login</dt><dd>{{ p.last_login_at | date: 'medium' }}</dd>
-                <dt>Account created</dt><dd>{{ p.created_at | date: 'medium' }}</dd>
-              </dl>
-            </div>
-          </section>
+              <div class="card">
+                <h3>Session</h3>
+                <dl>
+                  <dt>Last login</dt><dd>{{ p.last_login_at | date: 'medium' }}</dd>
+                  <dt>Account created</dt><dd>{{ p.created_at | date: 'medium' }}</dd>
+                </dl>
+              </div>
+            </section>
+          }
         }
       </main>
     </div>
