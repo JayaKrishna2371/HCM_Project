@@ -121,8 +121,10 @@ def validate_access_token(token: str) -> Dict[str, Any]:
             algorithms=settings.AZURE_JWT_ALGORITHMS,
             audience=settings.AZURE_API_AUDIENCE,
             issuer=_cache.issuers,
-            options={"verify_at_hash": False},
-            leeway=settings.JWT_LEEWAY_SECONDS,
+            options={
+                "verify_at_hash": False,
+                "leeway": settings.JWT_LEEWAY_SECONDS,
+            },
         )
     except ExpiredSignatureError as e:
         raise AzureADValidationError("Token has expired") from e

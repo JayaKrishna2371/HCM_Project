@@ -5,10 +5,10 @@ All values come from environment variables / .env file. Never commit secrets.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List
+from typing import Annotated, List
 
-from pydantic import AnyHttpUrl, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # ----- CORS -----
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] | List[str] = Field(default_factory=list)
+    BACKEND_CORS_ORIGINS: Annotated[List[str], NoDecode] = Field(default_factory=list)
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     AZURE_TENANT_ID: str
     AZURE_CLIENT_ID: str
     AZURE_API_AUDIENCE: str
-    AZURE_JWT_ALGORITHMS: List[str] = Field(default_factory=lambda: ["RS256"])
+    AZURE_JWT_ALGORITHMS: Annotated[List[str], NoDecode] = Field(default_factory=lambda: ["RS256"])
 
     @field_validator("AZURE_JWT_ALGORITHMS", mode="before")
     @classmethod

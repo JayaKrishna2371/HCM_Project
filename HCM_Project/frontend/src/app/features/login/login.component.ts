@@ -79,7 +79,7 @@ export class LoginComponent implements OnInit {
     setTimeout(() => {
       this.isBusy.set(false);
       this.toast.info(
-        'Local password sign-in is disabled in Phase 1. Please use "Sign in with Azure AD".',
+        'Local password sign-in is disabled in Phase 1. Please use "Sign in with Microsoft Entra ID".',
         5000,
       );
     }, 400);
