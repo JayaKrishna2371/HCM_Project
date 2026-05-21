@@ -1,9 +1,23 @@
-"""Schemas surfaced on /auth endpoints."""
+"""Schemas for the /auth endpoints."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.user import UserRead
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=256)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds until the access token expires
+    user: UserRead
 
 
 class TokenIntrospectionResponse(BaseModel):

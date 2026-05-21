@@ -12,7 +12,7 @@ import { RouterLink } from '@angular/router';
         <div class="badge">403</div>
         <h1>Access denied</h1>
         <p>You're signed in, but you don't have permission to view that page.</p>
-        <p class="muted">If you believe this is a mistake, contact your Azure AD administrator and ask to be assigned the appropriate app role.</p>
+        <p class="muted">If you believe this is a mistake, contact your Active Directory administrator and ask to be added to the appropriate security group.</p>
         <a routerLink="/dashboard" class="back">← Back to dashboard</a>
       </div>
     </div>

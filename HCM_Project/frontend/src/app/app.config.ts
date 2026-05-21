@@ -1,30 +1,10 @@
-import { ApplicationConfig, importProvidersFrom } from '@angular/core';
-import {
-  HTTP_INTERCEPTORS,
-  provideHttpClient,
-  withInterceptors,
-  withInterceptorsFromDi,
-} from '@angular/common/http';
+import { ApplicationConfig } from '@angular/core';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 
-import {
-  MSAL_GUARD_CONFIG,
-  MSAL_INSTANCE,
-  MSAL_INTERCEPTOR_CONFIG,
-  MsalBroadcastService,
-  MsalGuard,
-  MsalInterceptor,
-  MsalModule,
-  MsalService,
-} from '@azure/msal-angular';
-
 import { routes } from './app.routes';
-import {
-  msalGuardConfigFactory,
-  msalInstanceFactory,
-  msalInterceptorConfigFactory,
-} from './core/config/msal.config';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 
 export const appConfig: ApplicationConfig = {
@@ -32,23 +12,10 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideRouter(routes, withComponentInputBinding()),
 
-    // MSAL Angular needs DI-style interceptors so its multi-provider HTTP_INTERCEPTORS
-    // chain is honored alongside our functional error interceptor.
+    // authInterceptor attaches the LDAP session token; errorInterceptor maps
+    // 401/403/5xx responses to toasts + redirects. Order matters: auth first.
     provideHttpClient(
-      withInterceptorsFromDi(),
-      withInterceptors([errorInterceptor]),
+      withInterceptors([authInterceptor, errorInterceptor]),
     ),
-
-    importProvidersFrom(MsalModule),
-
-    { provide: MSAL_INSTANCE, useFactory: msalInstanceFactory },
-    { provide: MSAL_GUARD_CONFIG, useFactory: msalGuardConfigFactory },
-    { provide: MSAL_INTERCEPTOR_CONFIG, useFactory: msalInterceptorConfigFactory },
-
-    MsalService,
-    MsalGuard,
-    MsalBroadcastService,
-
-    { provide: HTTP_INTERCEPTORS, useClass: MsalInterceptor, multi: true },
   ],
 };

@@ -7,8 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { InteractionStatus } from '@azure/msal-browser';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -27,15 +26,17 @@ export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly form = this.fb.nonNullable.group({
-    username: ['', [Validators.required, Validators.minLength(3)]],
-    password: ['', [Validators.required, Validators.minLength(6)]],
+    username: ['', [Validators.required, Validators.minLength(2)]],
+    password: ['', [Validators.required]],
     remember: [false],
   });
 
   readonly isBusy = signal(false);
-  readonly isAzureBusy = signal(false);
+
+  private returnUrl = '/dashboard';
 
   ngOnInit(): void {
     if (this.auth.isAuthenticated()) {
@@ -43,9 +44,7 @@ export class LoginComponent implements OnInit {
       return;
     }
 
-    this.auth.interactionStatus$.subscribe((status) => {
-      this.isAzureBusy.set(status !== InteractionStatus.None);
-    });
+    this.returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
 
     const remembered = localStorage.getItem('hcm.rememberedUser');
     if (remembered) {
@@ -54,50 +53,35 @@ export class LoginComponent implements OnInit {
   }
 
   /**
-   * Local-credentials submit path.
-   *
-   * Phase 1 enterprise policy: identity is owned by Azure AD. We surface a
-   * username/password form for UX continuity, but it is intentionally inert —
-   * users must sign in with Azure AD. This avoids a parallel password store
-   * (and the breach surface that comes with it).
+   * Sign in with Active Directory credentials. The backend verifies them over
+   * LDAP and returns a session token on success.
    */
-  onSubmit(): void {
-    if (this.form.invalid) {
+  async onSubmit(): Promise<void> {
+    if (this.form.invalid || this.isBusy()) {
       this.form.markAllAsTouched();
       return;
     }
 
     this.isBusy.set(true);
+    const { username, password, remember } = this.form.getRawValue();
 
-    const { username, remember } = this.form.getRawValue();
     if (remember) {
       localStorage.setItem('hcm.rememberedUser', username);
     } else {
       localStorage.removeItem('hcm.rememberedUser');
     }
 
-    setTimeout(() => {
-      this.isBusy.set(false);
-      this.toast.info(
-        'Local password sign-in is disabled in Phase 1. Please use "Sign in with Microsoft Entra ID".',
-        5000,
-      );
-    }, 400);
-  }
-
-  async onAzureAdLogin(): Promise<void> {
-    if (this.isAzureBusy()) {
-      return;
-    }
-    this.isAzureBusy.set(true);
     try {
-      await this.auth.loginPopup();
+      const ok = await this.auth.login(username, password, remember);
+      if (ok) {
+        await this.router.navigateByUrl(this.returnUrl);
+      }
     } finally {
-      this.isAzureBusy.set(false);
+      this.isBusy.set(false);
     }
   }
 
   onForgotPassword(): void {
-    this.toast.info('Password recovery is managed by your Azure AD administrator.');
+    this.toast.info('Passwords are managed in Active Directory. Contact your IT administrator to reset it.');
   }
 }

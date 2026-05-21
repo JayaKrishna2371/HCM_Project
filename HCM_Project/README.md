@@ -1,28 +1,36 @@
 # Hybrid Cloud Management (HCM) Platform — Phase 1
 
-**Phase 1 scope:** Enterprise Authentication & Login Module with Azure AD (Entra ID) SSO, JWT validation, RBAC, and protected routes. Local-only execution (no Docker / K8s / cloud infra in this phase).
+**Phase 1 scope:** Enterprise Authentication & Login Module using **Microsoft
+Active Directory over LDAP**, backend-issued JWT sessions, RBAC, and protected
+routes. Local-only execution (no Docker / K8s / cloud infra in this phase).
 
 ```
 HCM_Project/
-├── frontend/   # Angular 17 (standalone) + MSAL Angular
-├── backend/    # FastAPI + Azure AD JWT validation + PostgreSQL
+├── frontend/   # Angular 17 (standalone) — username/password login form
+├── backend/    # FastAPI — LDAP bind to AD + JWT issuance + PostgreSQL
 └── README.md   # This file (master setup guide)
 ```
 
+> **Auth model in one line:** the user types their AD username + password →
+> FastAPI binds to a Domain Controller over LDAP to verify it → on success the
+> backend issues its own signed JWT, which the SPA sends as a bearer token.
+>
+> 👉 **The exact LDAP config (and what to ask your team lead for) is in
+> [`backend/LDAP_SETUP.md`](./backend/LDAP_SETUP.md).**
+
 ## Tech versions used
 
-| Layer        | Tech              | Version           |
-|--------------|-------------------|-------------------|
-| Frontend     | Angular           | 17.x              |
-| Frontend Auth| @azure/msal-angular | 3.x             |
-| Frontend Auth| @azure/msal-browser | 3.x             |
-| Backend      | Python            | 3.11+             |
-| Backend      | FastAPI           | 0.110+            |
-| Backend      | uvicorn           | 0.29+             |
-| Backend Auth | python-jose[cryptography] | 3.3+      |
-| Backend ORM  | SQLAlchemy        | 2.0+              |
-| DB Driver    | psycopg[binary]   | 3.1+              |
-| Database     | PostgreSQL        | 15+               |
+| Layer        | Tech                      | Version  |
+|--------------|---------------------------|----------|
+| Frontend     | Angular                   | 17.x     |
+| Backend      | Python                    | 3.11+    |
+| Backend      | FastAPI                   | 0.136+   |
+| Backend      | uvicorn                   | 0.46+    |
+| Backend Auth | ldap3 (LDAP client)       | 2.9.1    |
+| Backend Auth | python-jose[cryptography] | 3.5+     |
+| Backend ORM  | SQLAlchemy                | 2.0+     |
+| DB Driver    | psycopg[binary]           | 3.3+     |
+| Database     | PostgreSQL                | 15+      |
 
 ---
 
@@ -30,111 +38,38 @@ HCM_Project/
 
 Install on Windows:
 
-1. **Node.js LTS 20.x** → https://nodejs.org/en/download
+1. **Node.js LTS 20.x+** → https://nodejs.org/en/download
 2. **Python 3.11 or 3.12** → https://www.python.org/downloads/ (tick *Add Python to PATH*)
-3. **PostgreSQL 15+** → https://www.postgresql.org/download/windows/ (remember the `postgres` password you set during install)
+3. **PostgreSQL 15+** → https://www.postgresql.org/download/windows/
 4. **Git** → https://git-scm.com/download/win
-5. **Angular CLI** globally:
-   ```powershell
-   npm install -g @angular/cli@17
-   ```
+5. **Angular CLI** globally: `npm install -g @angular/cli@17`
 
-Verify:
-```powershell
-node -v          # v20.x
-npm -v           # 10.x
-python --version # 3.11.x or 3.12.x
-ng version       # Angular CLI 17.x
-psql --version   # 15+
-```
+Verify: `node -v`, `python --version`, `ng version`, `psql --version`.
+
+You also need **network access from this machine to a Microsoft AD Domain
+Controller** (LDAPS 636 or LDAP/StartTLS 389), plus the connection/credentials
+details — see step 1.
 
 ---
 
-## 1. Azure AD (Entra ID) App Registration — step by step
+## 1. Active Directory / LDAP configuration
 
-> You need an Azure AD tenant. A free **personal Microsoft 365 Developer tenant** works: https://developer.microsoft.com/microsoft-365/dev-program
+This is the part to coordinate with your team lead. The full checklist of values
+to collect and where each goes lives in **[`backend/LDAP_SETUP.md`](./backend/LDAP_SETUP.md)**.
+In short you need:
 
-### 1.1 Create the app registration
+- the **LDAPS URL** of the domain controller(s) (and a CA cert if it's internal),
+- either a **read-only service account** (DN + password) + the **user search base
+  OU** (recommended), **or** the **UPN domain suffix** for direct bind,
+- the **AD security groups** that map to the app's **Admin / Operator / Viewer** roles,
+- a **test user** to validate with.
 
-1. Go to **Azure Portal → Microsoft Entra ID → App registrations → + New registration**.
-2. Fill in:
-   - **Name:** `HCM-Platform-Local`
-   - **Supported account types:** *Accounts in this organizational directory only (Single tenant)*
-   - **Redirect URI:** select **Single-page application (SPA)** and enter:
-     ```
-     http://localhost:4200
-     ```
-3. Click **Register**.
-
-### 1.2 Copy these three values (you'll paste them into env files)
-
-On the **Overview** tab:
-- **Application (client) ID** → this is `AZURE_CLIENT_ID`
-- **Directory (tenant) ID** → this is `AZURE_TENANT_ID`
-
-### 1.3 Add a second redirect URI for the backend Swagger UI (optional but useful)
-
-**Authentication** blade →
-- Under **Single-page application**, click **Add URI** and add:
-  ```
-  http://localhost:4200/auth-callback
-  ```
-- Under **Implicit grant and hybrid flows**, leave **everything UNCHECKED** (we use Auth Code + PKCE, not implicit).
-- **Allow public client flows:** No.
-- Save.
-
-### 1.4 Expose an API (so the backend can validate access tokens)
-
-**Expose an API** blade →
-1. Click **Add** next to *Application ID URI*. Accept the default `api://<client-id>` → **Save**.
-2. Click **+ Add a scope**:
-   - **Scope name:** `access_as_user`
-   - **Who can consent:** *Admins and users*
-   - **Admin consent display name:** `Access HCM API as user`
-   - **Admin consent description:** `Allows the app to access HCM API on behalf of the signed-in user.`
-   - **State:** Enabled
-   - **Add scope**
-
-   Full scope value becomes: `api://<client-id>/access_as_user`
-
-### 1.5 API permissions
-
-**API permissions** blade →
-1. **+ Add a permission → Microsoft Graph → Delegated permissions**:
-   - `openid`
-   - `profile`
-   - `email`
-   - `User.Read`
-2. **+ Add a permission → My APIs → HCM-Platform-Local → Delegated permissions**:
-   - `access_as_user`
-3. Click **Grant admin consent for <your tenant>** (top button).
-
-### 1.6 Token configuration (optional, recommended for roles)
-
-**Token configuration** blade →
-- **+ Add optional claim → Access token →** check `email`, `family_name`, `given_name` → Add.
-- **+ Add optional claim → ID token →** check `email`, `family_name`, `given_name` → Add.
-
-### 1.7 App roles (for RBAC)
-
-**App roles** blade → **+ Create app role**:
-
-| Display name | Allowed member types | Value     | Description           |
-|--------------|----------------------|-----------|-----------------------|
-| Admin        | Users/Groups         | `Admin`   | Platform administrator|
-| Operator     | Users/Groups         | `Operator`| Cloud operator        |
-| Viewer       | Users/Groups         | `Viewer`  | Read-only viewer      |
-
-Then assign roles to your test user(s):
-**Microsoft Entra ID → Enterprise applications → HCM-Platform-Local → Users and groups → + Add user/group →** pick a user → pick a role → Assign.
-
-> If your tenant edition does not allow app-role assignment from the Enterprise Apps blade (rare on free dev tenants), the code falls back to treating every signed-in user as **Viewer**. You can change this default in `backend/app/core/azure_ad.py`.
+These go into `backend/.env` (`LDAP_*` keys). Nothing identity-provider-specific
+needs configuring in the Angular app.
 
 ---
 
 ## 2. PostgreSQL setup (local)
-
-Open **SQL Shell (psql)** or **pgAdmin** and run:
 
 ```sql
 CREATE DATABASE hcm_db;
@@ -144,14 +79,16 @@ GRANT ALL PRIVILEGES ON DATABASE hcm_db TO hcm_user;
 GRANT ALL ON SCHEMA public TO hcm_user;
 ```
 
-> The backend auto-creates the `users` table on first start.
+> The backend auto-creates the `users` table on first start. This table is keyed
+> on `directory_id` (AD objectGUID). If you are migrating from the old Azure-AD
+> build, start from a fresh DB or drop the old `users` table first.
 
 ---
 
 ## 3. Backend — FastAPI
 
 ```powershell
-cd "c:\Users\Jaya Krishna\OneDrive\Desktop\HCM_Project\backend"
+cd backend
 
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -159,14 +96,16 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 copy .env.example .env
-notepad .env       # fill in AZURE_TENANT_ID and AZURE_CLIENT_ID
+notepad .env       # fill in the LDAP_* values + JWT_SECRET_KEY + DATABASE_URL
 
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend will be running at: <http://localhost:8000>
-Swagger docs: <http://localhost:8000/docs>
-Health: <http://localhost:8000/api/v1/health>
+- Backend: <http://localhost:8000>  ·  Swagger: <http://localhost:8000/docs>
+- Health: <http://localhost:8000/api/v1/health>
+
+Generate a JWT signing secret with:
+`python -c "import secrets; print(secrets.token_hex(32))"`
 
 > If PowerShell blocks `Activate.ps1`, run once:
 > `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
@@ -176,185 +115,115 @@ Health: <http://localhost:8000/api/v1/health>
 ## 4. Frontend — Angular 17
 
 ```powershell
-cd "c:\Users\Jaya Krishna\OneDrive\Desktop\HCM_Project\frontend"
-
+cd frontend
 npm install
-
-# Open src/environments/environment.development.ts and fill in:
-#   tenantId, clientId  (from Azure step 1.2)
-
 npm start
 ```
 
-Frontend will be running at: <http://localhost:4200>
+Frontend runs at <http://localhost:4200>. No auth config needed in the SPA —
+just point `apiBaseUrl` at the backend (default `http://localhost:8000/api/v1`
+in `src/environments/environment.development.ts`).
 
 ---
 
-## 5. Drop in your custom images
+## 5. End-to-end test flow
 
-Place the two images you uploaded into:
+1. Backend on :8000, frontend on :4200.
+2. Open <http://localhost:4200> — you'll see the **Hybrid Cloud Portal** login page.
+3. Enter your **AD username + password** and click **Sign In**.
+4. The backend binds to AD over LDAP; on success you land on **/dashboard** showing
+   your name and roles (derived from your AD group membership).
+5. DevTools → Network → `POST /api/v1/auth/login` returns `200` with an
+   `access_token`; subsequent calls like `GET /api/v1/users/me` send it as a
+   `Bearer` token and return `200`.
+6. Click **Logout** → token cleared, back to `/login`.
 
+CLI smoke test (no UI):
+```powershell
+curl -X POST http://localhost:8000/api/v1/auth/login `
+  -H "Content-Type: application/json" `
+  -d "{\"username\":\"testuser\",\"password\":\"...\"}"
 ```
-frontend/src/assets/images/background.jpg   <-- the blue cloud-in-hand image
-frontend/src/assets/images/logo.png         <-- (optional) your company logo
-```
-
-The login page automatically picks them up. The cloud icon in the title is rendered as inline SVG, so no logo is mandatory.
 
 ---
 
-## 6. End-to-end test flow
-
-1. Backend running on :8000, frontend on :4200.
-2. Open <http://localhost:4200> — you should see the **Hybrid Cloud Portal** login page.
-3. Click **Sign in with Azure AD**.
-4. Microsoft login popup → enter your Azure AD test user → consent (first time only).
-5. You should be redirected to the **/dashboard** route showing your name, email, and roles.
-6. Open DevTools → Network → look for `GET /api/v1/users/me` returning 200 with your profile.
-7. Click **Logout** → token cleared and you bounce back to `/login`.
-
----
-
-## 7. Architecture & flow
+## 6. Architecture & flow
 
 ### High-level
 ```
 +------------------+          +------------------+         +----------------------+
 |  Angular 17 SPA  | <------> |  FastAPI Backend | <-----> |   PostgreSQL (local) |
-|  (MSAL Angular)  |          |  (JWT validator) |         |    users table       |
+|  (login form +   |  bearer  |  (LDAP bind +    |         |    users table       |
+|   bearer token)  |   JWT    |   JWT issuer)    |         |  (keyed on objectGUID)|
 +--------+---------+          +--------+---------+         +----------------------+
-         |                             |
-         |  Authorization Code + PKCE  |  validates RS256 JWT against Entra JWKS
-         v                             v
-+-------------------------------------------------------------+
-|                    Microsoft Entra ID (Azure AD)            |
-|  /authorize  /token  /jwks  /.well-known/openid-config      |
-+-------------------------------------------------------------+
+                                       |
+                                       |  LDAP bind / search (LDAPS 636)
+                                       v
+                             +---------------------------+
+                             |  Microsoft Active Directory|
+                             |     (Domain Controllers)   |
+                             +---------------------------+
 ```
 
 ### Sequence — login
 ```
-User -> Angular: click "Sign in with Azure AD"
-Angular(MSAL) -> Entra ID: GET /authorize?code_challenge=PKCE...
-Entra ID -> User: shows login page (popup)
-User -> Entra ID: credentials + MFA
-Entra ID -> Angular(MSAL): authorization code (popup callback)
-Angular(MSAL) -> Entra ID: POST /token (code + code_verifier)
-Entra ID -> Angular(MSAL): id_token + access_token
-Angular -> FastAPI: GET /api/v1/users/me  (Bearer access_token)
-FastAPI -> Entra ID: GET /.well-known/openid-configuration + JWKS (cached)
-FastAPI -> FastAPI: validate signature, iss, aud, exp + extract roles
-FastAPI -> PostgreSQL: upsert user record
-FastAPI -> Angular: 200 { id, email, name, roles }
-Angular -> Router: navigate to /dashboard
+User    -> Angular : enter AD username + password, click Sign In
+Angular -> FastAPI : POST /api/v1/auth/login { username, password }
+FastAPI -> AD (LDAP): bind to verify password (search-then-bind or direct bind)
+FastAPI -> AD (LDAP): read attributes + memberOf (group DNs)
+FastAPI -> FastAPI : map AD groups -> roles, upsert local user row
+FastAPI -> FastAPI : sign a JWT (HS256) with sub=objectGUID, roles=[...]
+FastAPI -> Angular : 200 { access_token, expires_in, user }
+Angular -> Router  : store token, navigate to /dashboard
+Angular -> FastAPI : GET /api/v1/users/me  (Authorization: Bearer <JWT>)
+FastAPI -> FastAPI : validate JWT signature, iss, aud, exp -> 200 profile
 ```
 
 ### Token lifecycle
-- Access token TTL: ~60–90 min (Entra default). MSAL silently refreshes via hidden iframe (`acquireTokenSilent`).
-- Idle session timeout enforced client-side at **30 min** by `SessionService` (configurable in `environment.ts`).
-- On hard refresh, MSAL re-hydrates the account from `sessionStorage` (configured via MSAL `cacheLocation`).
+- Access token TTL: `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60 min). No refresh
+  token — the user signs in again on expiry.
+- Idle session timeout enforced client-side at **30 min** by `SessionService`
+  (configurable in `environment.ts`).
+- On hard refresh the SPA re-hydrates the session from `localStorage`/
+  `sessionStorage` ("Keep me signed in" chooses which).
 
 ---
 
-## 8. Common Azure AD localhost issues & fixes
+## 7. Common LDAP issues & fixes
 
-| Error                                                   | Cause / Fix                                                                                 |
-|---------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| `AADSTS9002326: Cross-origin token redemption is permitted only for the 'Single-Page Application' client type` | Redirect URI is registered under *Web* instead of *Single-page application*. Move it.       |
-| `AADSTS50011: redirect URI ... does not match`         | Add **exact** URI `http://localhost:4200` to App Registration → Authentication → SPA.       |
-| `AADSTS65001: consent required`                        | Click **Grant admin consent** in API permissions; or re-login and accept the consent prompt.|
-| Backend returns 401 `Invalid audience`                  | `AZURE_API_AUDIENCE` in backend `.env` must equal `api://<client-id>` exactly.              |
-| Backend returns 401 `Invalid issuer`                    | `AZURE_TENANT_ID` mismatch between frontend and backend.                                    |
-| CORS error on `/api/v1/users/me`                        | Frontend origin must be in `BACKEND_CORS_ORIGINS` (already set to `http://localhost:4200`). |
-| Popup blocked                                          | Allow popups for `localhost:4200`, or switch to `loginRedirect` in `auth.service.ts`.       |
-| Tokens disappear on hard refresh                       | Make sure `cacheLocation` is `sessionStorage` (default) **or** `localStorage`. Not `memory`.|
+| Symptom                                                  | Cause / Fix                                                                                  |
+|----------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| Login returns `401 Invalid username or password`         | Wrong creds, **or** the search filter / search base doesn't match the user. Check `LDAP_USER_SEARCH_BASE` and `LDAP_USER_SEARCH_FILTER`. |
+| Login returns `401 Unable to reach the directory server` | DC unreachable: wrong `LDAP_SERVER_URIS`, port blocked by firewall, or DNS can't resolve the DC. |
+| TLS / certificate errors on connect                      | DC uses an internal CA — set `LDAP_CA_CERTS_FILE` to the CA bundle. (Lab-only: `LDAP_TLS_VALIDATE=false`.) |
+| Login returns `503`                                      | LDAP settings missing/invalid in `.env` (e.g. empty `LDAP_SERVER_URIS`).                     |
+| User logs in but always gets **Viewer**                  | Their AD groups don't match `LDAP_ROLE_MAPPINGS`, or groups are **nested** (see LDAP_SETUP.md). |
+| `401 Invalid token` on API calls                         | `JWT_SECRET_KEY` changed/mismatched, or the token expired — sign in again.                   |
+| CORS error on `/api/v1/...`                              | Frontend origin must be in `BACKEND_CORS_ORIGINS` (defaults to `http://localhost:4200`).     |
 
 ---
 
-## 9. Folder structure (full)
+## 8. Folder structure (auth-relevant parts)
 
 ```
-HCM_Project/
-├── .gitignore
-├── README.md
-│
-├── backend/
-│   ├── .env.example
-│   ├── requirements.txt
-│   ├── README.md
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── api/
-│       │   ├── __init__.py
-│       │   └── v1/
-│       │       ├── __init__.py
-│       │       ├── router.py
-│       │       └── endpoints/
-│       │           ├── __init__.py
-│       │           ├── auth.py
-│       │           ├── health.py
-│       │           └── users.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── azure_ad.py
-│       │   ├── config.py
-│       │   └── security.py
-│       ├── db/
-│       │   ├── __init__.py
-│       │   ├── base.py
-│       │   └── session.py
-│       ├── dependencies/
-│       │   ├── __init__.py
-│       │   └── auth.py
-│       ├── models/
-│       │   ├── __init__.py
-│       │   └── user.py
-│       ├── schemas/
-│       │   ├── __init__.py
-│       │   ├── auth.py
-│       │   └── user.py
-│       └── services/
-│           ├── __init__.py
-│           └── user_service.py
-│
-└── frontend/
-    ├── package.json
-    ├── angular.json
-    ├── tsconfig.json
-    ├── tsconfig.app.json
-    ├── README.md
-    └── src/
-        ├── index.html
-        ├── main.ts
-        ├── styles.scss
-        ├── assets/images/
-        │   ├── background.jpg
-        │   └── logo.png
-        ├── environments/
-        │   ├── environment.ts
-        │   └── environment.development.ts
-        └── app/
-            ├── app.component.ts
-            ├── app.config.ts
-            ├── app.routes.ts
-            ├── core/
-            │   ├── config/msal.config.ts
-            │   ├── guards/auth.guard.ts
-            │   ├── guards/role.guard.ts
-            │   ├── interceptors/auth.interceptor.ts
-            │   ├── interceptors/error.interceptor.ts
-            │   ├── models/user.model.ts
-            │   └── services/
-            │       ├── auth.service.ts
-            │       ├── session.service.ts
-            │       ├── toast.service.ts
-            │       └── user.service.ts
-            ├── features/
-            │   ├── dashboard/dashboard.component.ts
-            │   ├── login/login.component.ts
-            │   └── unauthorized/unauthorized.component.ts
-            └── shared/components/
-                ├── spinner/spinner.component.ts
-                └── toast/toast.component.ts
+backend/app/
+├── core/
+│   ├── ldap_auth.py    # LDAP bind, user search, group->role mapping
+│   ├── security.py     # JWT issue/verify + secure headers
+│   └── config.py       # LDAP_* and JWT_* settings
+├── dependencies/auth.py# get_current_user (validates our JWT) + require_roles
+├── api/v1/endpoints/auth.py  # POST /auth/login (LDAP -> JWT), logout, introspect
+├── models/user.py      # users table keyed on directory_id (objectGUID)
+├── schemas/            # LoginRequest, TokenResponse, UserRead
+└── services/user_service.py  # upsert_from_ldap
+
+frontend/src/app/
+├── core/
+│   ├── services/auth.service.ts     # login()/logout(), bearer-token storage
+│   ├── interceptors/auth.interceptor.ts  # attaches Bearer token
+│   ├── guards/{auth,role}.guard.ts
+│   └── models/user.model.ts
+└── features/login/login.component.* # username/password form
 ```
+
+> Configuration & "what to collect from your team lead": **[`backend/LDAP_SETUP.md`](./backend/LDAP_SETUP.md)**.

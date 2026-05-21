@@ -8,8 +8,9 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserBase(BaseModel):
-    azure_oid: str
-    tenant_id: Optional[str] = None
+    directory_id: str
+    username: Optional[str] = None
+    upn: Optional[str] = None
     email: Optional[EmailStr] = None
     name: Optional[str] = None
     given_name: Optional[str] = None

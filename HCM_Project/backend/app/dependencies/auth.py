@@ -1,9 +1,10 @@
 """FastAPI auth dependencies.
 
-`get_current_user` enforces a valid Azure AD access token on any endpoint,
-upserts the local user row, and returns the ORM instance.
+``get_current_user`` enforces a valid session JWT (issued by this API after a
+successful LDAP bind) on any endpoint, loads the local user row, and returns the
+ORM instance.
 
-`require_roles(*roles)` is a dependency factory for RBAC-protected endpoints.
+``require_roles(*roles)`` is a dependency factory for RBAC-protected endpoints.
 """
 from __future__ import annotations
 
@@ -13,17 +14,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.azure_ad import (
-    AzureADValidationError,
-    extract_user_profile,
-    validate_access_token,
-)
+from app.core.security import TokenError, decode_access_token
 from app.db.session import get_db
 from app.models.user import User
 from app.services import user_service
 
-# auto_error=True → returns 403 if no Authorization header at all.
-# We override to raise 401 for both missing and invalid tokens so the SPA can react uniformly.
+# auto_error=False so we can raise a uniform 401 for both missing and invalid tokens.
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -39,22 +35,28 @@ def get_current_user(
         )
 
     try:
-        claims = validate_access_token(creds.credentials)
-    except AzureADValidationError as e:
+        claims = decode_access_token(creds.credentials)
+    except TokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
 
-    profile = extract_user_profile(claims)
-    if not profile.get("azure_oid"):
+    directory_id = claims.get("sub")
+    if not directory_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing required subject/oid claim",
+            detail="Token missing subject claim",
         )
 
-    user = user_service.upsert_from_claims(db, profile)
+    user = user_service.get_user_by_directory_id(db, directory_id)
+    if user is None:
+        # Token is validly signed but the user no longer exists locally.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found — please sign in again",
+        )
     return user
 
 

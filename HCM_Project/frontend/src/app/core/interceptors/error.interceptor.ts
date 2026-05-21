@@ -19,18 +19,27 @@ export const errorInterceptor: HttpInterceptorFn = (
   const auth = inject(AuthService);
   const router = inject(Router);
 
+  const isLoginRequest = req.url.endsWith('/auth/login');
+
   return next(req).pipe(
     catchError((err: HttpErrorResponse) => {
+      const detail = (err.error as { detail?: string } | undefined)?.detail;
       switch (err.status) {
         case 0:
           toast.error('Cannot reach API. Is the FastAPI backend running on :8000?');
           break;
         case 401:
-          toast.warn('Session expired. Please sign in again.');
-          if (auth.isAuthenticated()) {
-            auth.logout();
+          if (isLoginRequest) {
+            // A failed sign-in (e.g. wrong AD credentials) — show the real reason
+            // and stay on the login page; do not treat it as an expired session.
+            toast.error(detail ?? 'Invalid username or password');
           } else {
-            router.navigateByUrl('/login');
+            toast.warn('Session expired. Please sign in again.');
+            if (auth.isAuthenticated()) {
+              auth.logout();
+            } else {
+              router.navigateByUrl('/login');
+            }
           }
           break;
         case 403:
@@ -42,10 +51,8 @@ export const errorInterceptor: HttpInterceptorFn = (
         case 503:
           toast.error('Server error. Please try again shortly.');
           break;
-        default: {
-          const detail = (err.error as { detail?: string } | undefined)?.detail;
+        default:
           toast.error(detail ?? err.message ?? 'Unexpected error');
-        }
       }
       return throwError(() => err);
     }),

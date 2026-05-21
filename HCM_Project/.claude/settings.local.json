@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./venv/Scripts/python.exe -c \"import secrets; print\\(secrets.token_hex\\(32\\)\\)\")",
+      "Bash(./venv/Scripts/python.exe -c \"import app.main as m; print\\('app imported OK'\\); print\\('routes:'\\); [print\\(' ', getattr\\(r,'methods',None\\), getattr\\(r,'path',None\\)\\) for r in m.app.routes if getattr\\(r,'path',''\\).startswith\\('/api'\\)]\")",
+      "Bash(rm -f frontend/src/app/core/config/msal.config.ts)",
+      "Bash(rmdir frontend/src/app/core/config)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Admin\\.claude\\projects\\c--Users-Admin-Desktop-HCM-Project\\memory"
+    ]
+  }
+}

@@ -1,23 +1,21 @@
 /**
  * Local development environment.
  *
- * Replace tenantId and clientId with values from your Azure AD App Registration.
- *   Azure Portal → Microsoft Entra ID → App registrations → <your app> → Overview
- *
- * apiScope must match the scope you exposed under "Expose an API".
+ * Authentication is handled by the backend, which verifies credentials against
+ * Microsoft Active Directory over LDAP and returns a signed session token.
+ * There is nothing identity-provider-specific to configure in the SPA.
  */
 export const environment = {
   production: false,
 
   apiBaseUrl: 'http://localhost:8000/api/v1',
 
-  azure: {
-    tenantId: 'fc388343-6a22-4b5b-a32f-a6aa2320b0fb',
-    clientId: 'b643e0ac-2602-4281-8da2-1eaec09adc23',
-    redirectUri: 'http://localhost:4200',
-    postLogoutRedirectUri: 'http://localhost:4200',
-    // Scope your backend will require on incoming access tokens
-    apiScope: 'api://b643e0ac-2602-4281-8da2-1eaec09adc23/access_as_user',
+  auth: {
+    // Where the bearer token is kept. 'session' clears on tab close (default);
+    // 'local' persists across browser restarts (used when "Keep me signed in").
+    tokenStorageKey: 'hcm.accessToken',
+    profileStorageKey: 'hcm.userProfile',
+    expiryStorageKey: 'hcm.tokenExpiry',
   },
 
   session: {

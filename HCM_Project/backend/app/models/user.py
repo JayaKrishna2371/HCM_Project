@@ -1,4 +1,4 @@
-"""User ORM model — local mirror of Azure AD identities."""
+"""User ORM model — local mirror of Active Directory identities."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,16 +15,19 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # Azure AD object id — globally unique per identity
-    azure_oid: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Stable AD identifier — objectGUID (falls back to UPN/sAMAccountName).
+    directory_id: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+
+    # sAMAccountName — the login name; userPrincipalName is the full alice@corp.
+    username: Mapped[Optional[str]] = mapped_column(String(256), index=True, nullable=True)
+    upn: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
 
     email: Mapped[Optional[str]] = mapped_column(String(320), index=True, nullable=True)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     given_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     family_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
 
-    # Snapshot of roles at last login; live roles are still re-read from the token.
+    # Roles derived from AD group membership at last login.
     roles: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
 
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

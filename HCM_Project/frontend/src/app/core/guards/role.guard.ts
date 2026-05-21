@@ -15,7 +15,7 @@ export function roleGuard(allowed: string[]): CanActivateFn {
       return router.createUrlTree(['/login']);
     }
 
-    const userRoles = auth.rolesFromIdToken().map((r) => r.toLowerCase());
+    const userRoles = auth.roles().map((r) => r.toLowerCase());
     const ok = userRoles.some((r) => allowedLower.includes(r));
     return ok ? true : router.createUrlTree(['/unauthorized']);
   };
