@@ -82,9 +82,8 @@ class Settings(BaseSettings):
     LDAP_USER_SEARCH_FILTER: str = "(sAMAccountName={username})"
 
     # ----- Direct-bind mode (only used when LDAP_BIND_DN is empty) -----
-    # AD accepts userPrincipalName for bind. We turn "alice" into
-    # "alice@<LDAP_DEFAULT_DOMAIN>" unless the user already typed a UPN/domain.
-    LDAP_DEFAULT_DOMAIN: str | None = None    # e.g. corp.example.com
+    # No default domain by design: the user types their full UPN (user@domain)
+    # or DOMAIN\user, and the app binds with exactly that. Nothing is assumed.
 
     # ----- Attribute names on the directory entry -----
     LDAP_ATTR_GUID: str = "objectGUID"

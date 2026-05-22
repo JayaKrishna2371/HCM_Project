@@ -7,8 +7,9 @@ Flow
      * **search-then-bind** (recommended) — bind with a read-only service
        account, search for the user, then re-bind as the user's DN with the
        supplied password. This is the default whenever ``LDAP_BIND_DN`` is set.
-     * **direct-bind** — bind straight away as ``username@LDAP_DEFAULT_DOMAIN``
-       (userPrincipalName). Used when no service account is configured.
+     * **direct-bind** — bind straight away with exactly what the user typed
+       (a full UPN ``user@domain`` or ``DOMAIN\\user``). Used when no service
+       account is configured. No domain is ever assumed or appended.
 3. Once the bind succeeds we read the user's directory attributes + group
    memberships and map AD groups to application roles.
 
@@ -22,7 +23,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server, ServerPool, Tls
+from ldap3 import ALL, BASE, SIMPLE, SUBTREE, Connection, Server, ServerPool, Tls
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars
 
@@ -127,6 +128,12 @@ def authenticate(username: str, password: str) -> Dict[str, Any]:
     if settings.LDAP_BIND_DN:
         entry = _search_then_bind(username, password)
     else:
+        # Direct-bind: the user must supply a fully-qualified identity so the app
+        # never has to assume a domain. Accept a UPN (user@domain) or DOMAIN\user.
+        if "@" not in username and "\\" not in username:
+            raise LDAPAuthError(
+                "Enter your full username including domain, e.g. user@domain.com"
+            )
         entry = _direct_bind(username, password)
 
     return _build_profile(entry)
@@ -151,17 +158,20 @@ def _search_then_bind(username: str, password: str) -> Dict[str, Any]:
 
 
 def _direct_bind(username: str, password: str) -> Dict[str, Any]:
-    """Bind directly as the end user (no service account), then read attributes."""
-    bind_user = _as_upn(username)
-    conn = _connect(bind_user, password)
+    """Bind directly as the end user (no service account), then read attributes.
+
+    We bind with exactly what the user typed (a full UPN like user@domain, or
+    DOMAIN\\user). No domain is ever assumed or appended by the app.
+    """
+    conn = _connect(username, password)
     try:
         entry = _find_user(conn, username)
         if entry is None:
             # Bind succeeded but we couldn't read the entry — fall back to a
             # minimal profile derived from what the user typed.
             entry = {
-                "dn": bind_user,
-                "attrs": {settings.LDAP_ATTR_USERNAME: username, settings.LDAP_ATTR_UPN: bind_user},
+                "dn": username,
+                "attrs": {settings.LDAP_ATTR_USERNAME: username, settings.LDAP_ATTR_UPN: username},
                 "groups": [],
             }
         return entry
@@ -169,23 +179,81 @@ def _direct_bind(username: str, password: str) -> Dict[str, Any]:
         conn.unbind()
 
 
-def _as_upn(username: str) -> str:
-    """Turn a bare username into a userPrincipalName for direct bind."""
-    if "@" in username or "\\" in username:
-        return username  # already a UPN or DOMAIN\user
-    if settings.LDAP_DEFAULT_DOMAIN:
-        return f"{username}@{settings.LDAP_DEFAULT_DOMAIN}"
-    return username
+def _default_naming_context(conn: Connection) -> str:
+    """Ask the directory for its base DN via the RootDSE.
+
+    This is the authoritative search base and works even when the user's UPN
+    suffix differs from the AD DNS/DN name (e.g. UPN @nordicpoc.com but the
+    directory root is DC=nordicpoc,DC=local). Returns "" if unavailable.
+    """
+    # ldap3 with get_info=ALL pre-reads the RootDSE into server.info.
+    info = getattr(conn.server, "info", None)
+    if info is not None:
+        other = getattr(info, "other", {}) or {}
+        for key in ("defaultNamingContext", "defaultnamingcontext"):
+            val = other.get(key)
+            if val:
+                return val[0] if isinstance(val, (list, tuple)) else str(val)
+
+    # Fallback: read the RootDSE explicitly.
+    try:
+        if conn.search("", "(objectClass=*)", search_scope=BASE,
+                       attributes=["defaultNamingContext"]) and conn.entries:
+            val = conn.entries[0]["defaultNamingContext"].value
+            if val:
+                return val
+    except LDAPException:
+        pass
+    return ""
+
+
+def _derive_base_from_upn(username: str) -> str:
+    """Last-resort search base derived from a UPN's domain.
+
+    e.g.  jdoe@corp.local  ->  DC=corp,DC=local
+    Note: this is only correct when the UPN suffix matches the AD DN, which is
+    NOT always the case — prefer the RootDSE defaultNamingContext.
+    Returns "" if the username has no @domain part.
+    """
+    if "@" not in username:
+        return ""
+    domain = username.split("@", 1)[1]
+    return ",".join(f"DC={part}" for part in domain.split(".") if part)
 
 
 def _find_user(conn: Connection, username: str) -> Optional[Dict[str, Any]]:
-    """Search the directory for the user and return dn/attrs/groups."""
-    if not settings.LDAP_USER_SEARCH_BASE:
+    """Search the directory for the user and return dn/attrs/groups.
+
+    Works whether the user typed a bare name, a UPN (user@domain) or DOMAIN\\user:
+      * sAMAccountName never contains the domain, so we match it against the
+        *bare* part of whatever was typed.
+      * We also OR-in a userPrincipalName match against the full string, so a
+        typed UPN resolves directly.
+      * If no search base is configured, we ask the directory for its real base
+        DN (RootDSE defaultNamingContext), falling back to a UPN-derived guess.
+    """
+    base = (
+        settings.LDAP_USER_SEARCH_BASE
+        or _default_naming_context(conn)
+        or _derive_base_from_upn(username)
+    )
+    if not base:
         return None
 
-    search_filter = settings.LDAP_USER_SEARCH_FILTER.format(
-        username=escape_filter_chars(username)
-    )
+    if "@" in username:
+        bare = username.split("@", 1)[0]
+    elif "\\" in username:
+        bare = username.split("\\", 1)[1]
+    else:
+        bare = username
+
+    safe_bare = escape_filter_chars(bare)
+    safe_full = escape_filter_chars(username)
+    # Configured filter (default: sAMAccountName) matched against the bare name,
+    # OR a userPrincipalName match against the full typed value.
+    configured = settings.LDAP_USER_SEARCH_FILTER.format(username=safe_bare)
+    search_filter = f"(|{configured}({settings.LDAP_ATTR_UPN}={safe_full}))"
+
     attributes = [
         settings.LDAP_ATTR_GUID,
         settings.LDAP_ATTR_USERNAME,
@@ -197,7 +265,7 @@ def _find_user(conn: Connection, username: str) -> Optional[Dict[str, Any]]:
         settings.LDAP_ATTR_MEMBER_OF,
     ]
     ok = conn.search(
-        search_base=settings.LDAP_USER_SEARCH_BASE,
+        search_base=base,
         search_filter=search_filter,
         search_scope=SUBTREE,
         attributes=attributes,
