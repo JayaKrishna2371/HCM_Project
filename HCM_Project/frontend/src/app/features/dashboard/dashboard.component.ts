@@ -12,8 +12,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { UserService } from '../../core/services/user.service';
 import { UserProfile } from '../../core/models/user.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { VmwareComponent } from '../vmware/vmware.component';
 
-interface NavItem { label: string; icon: string; }
+interface FlyoutItem { label: string; icon: string; }
+interface NavItem { label: string; icon: string; children?: FlyoutItem[]; }
 interface KpiCard { label: string; value: number | string; icon: string; tone: 'blue' | 'violet' | 'teal' | 'amber'; }
 interface ResourceSlice { label: string; pct: number; color: string; }
 interface AlertItem { text: string; when: string; severity: 'high' | 'medium' | 'low'; }
@@ -26,7 +28,7 @@ interface XTick { x: number; label: string; }
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, SpinnerComponent],
+  imports: [CommonModule, SpinnerComponent, VmwareComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- ============ Icon sprite (hidden) ============ -->
@@ -46,6 +48,15 @@ interface XTick { x: number; label: string; }
         <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
         <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z M12 10v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><circle cx="12" cy="18" r="0.7" fill="currentColor"/></symbol>
         <symbol id="i-deploy" viewBox="0 0 24 24"><path d="M3 7h13l5 5v5H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+        <symbol id="i-aihub" viewBox="0 0 24 24"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z M18 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+        <symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="4" width="6" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="15" y="4" width="6" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9" y="15" width="6" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 9v3h12V9 M12 12v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+        <symbol id="i-token" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v10 M9 9.5h4.5a1.5 1.5 0 0 1 0 3H9h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-eval" viewBox="0 0 24 24"><path d="M9 11l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+        <symbol id="i-vmware" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="11" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="6.5" cy="8" r="0.7" fill="currentColor"/></symbol>
+        <symbol id="i-openstack" viewBox="0 0 24 24"><path d="M4 8h16 M4 16h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+        <symbol id="i-aws" viewBox="0 0 24 24"><path d="M5 14c4 2.5 10 2.5 14 0 M6 9.5c0-1.4 1.6-2.5 4-2.5s4 1.1 4 2.5v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M18 16.5c1-.8 1.6-2 1.6-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></symbol>
+        <symbol id="i-azure" viewBox="0 0 24 24"><path d="M9 4 3 18h4l5-9z M11 9l5 9H8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+        <symbol id="i-gcp" viewBox="0 0 24 24"><path d="M7 17a4 4 0 1 1 .6-7.9A6 6 0 0 1 19 11.5 4 4 0 0 1 18 19H8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 13l2 2 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 
         <!-- Hatch pattern for the "Containers" slice -->
         <pattern id="hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
@@ -107,16 +118,54 @@ interface XTick { x: number; label: string; }
       <aside class="sidebar" [class.is-collapsed]="sidebarCollapsed()">
         <nav class="nav">
           @for (item of nav; track item.label) {
-            <a class="nav-item"
-               [class.is-active]="item.label === activeNav()"
-               (click)="setActive(item.label)"
-               role="button" tabindex="0">
-              <svg class="nav-item__icon" width="20" height="20"><use [attr.href]="'#i-' + item.icon"></use></svg>
-              <span class="nav-item__label">{{ item.label }}</span>
-            </a>
+            @if (item.children) {
+              <!-- Item with a floating submenu (Clouds, AI Hub) -->
+              <div class="nav-flyout">
+                <a class="nav-item"
+                   [class.is-active]="activeNav() === item.label || isChildActive(item)"
+                   [class.is-open]="openFlyout() === item.label"
+                   (click)="toggleFlyout(item.label, $event)"
+                   role="button" tabindex="0"
+                   aria-haspopup="true" [attr.aria-expanded]="openFlyout() === item.label">
+                  <svg class="nav-item__icon" width="20" height="20"><use [attr.href]="'#i-' + item.icon"></use></svg>
+                  <span class="nav-item__label">{{ item.label }}</span>
+                  <svg class="nav-item__caret" viewBox="0 0 24 24" width="14" height="14"
+                       fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m9 6 6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </a>
+
+                @if (openFlyout() === item.label) {
+                  <div class="flyout" role="menu">
+                    @for (sub of item.children; track sub.label) {
+                      <a class="flyout__item"
+                         [class.is-active]="activeNav() === sub.label"
+                         (click)="selectChild(sub.label)"
+                         role="menuitem" tabindex="0">
+                        <svg class="flyout__icon" width="18" height="18"><use [attr.href]="'#i-' + sub.icon"></use></svg>
+                        <span>{{ sub.label }}</span>
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <a class="nav-item"
+                 [class.is-active]="item.label === activeNav()"
+                 (click)="setActive(item.label)"
+                 role="button" tabindex="0">
+                <svg class="nav-item__icon" width="20" height="20"><use [attr.href]="'#i-' + item.icon"></use></svg>
+                <span class="nav-item__label">{{ item.label }}</span>
+              </a>
+            }
           }
         </nav>
       </aside>
+
+      <!-- Click-away backdrop for any open flyout -->
+      @if (openFlyout()) {
+        <div class="flyout-backdrop" (click)="openFlyout.set(null)"></div>
+      }
 
       <!-- ============ Main ============ -->
       <main class="main">
@@ -130,7 +179,9 @@ interface XTick { x: number; label: string; }
             <h2>We couldn't load your dashboard.</h2>
             <p>{{ error() }}</p>
           </div>
-        } @else {
+        } @else if (activeNav() === 'VMware') {
+          <app-vmware />
+        } @else if (activeNav() === 'Dashboard') {
           <h1 class="page-title">Dashboard</h1>
 
           <!-- KPI row -->
@@ -178,14 +229,14 @@ interface XTick { x: number; label: string; }
               </div>
               <div class="resource__total">
                 <span class="muted">Total Resources</span>
-                <strong>1,250</strong>
+                <strong>0</strong>
               </div>
             </article>
 
             <article class="card">
               <h3 class="card__title">Cost Overview (This Month)</h3>
-              <div class="cost__amount">$ 8,450</div>
-              <div class="cost__delta">▲ 8.5% vs last month</div>
+              <div class="cost__amount">$ 0</div>
+              <div class="cost__delta">0% vs last month</div>
 
               <svg class="cost__chart" [attr.viewBox]="'0 0 ' + chartW + ' ' + chartH" preserveAspectRatio="none">
                 <defs>
@@ -222,6 +273,8 @@ interface XTick { x: number; label: string; }
                     <span class="list__text">{{ a.text }}</span>
                     <span class="list__meta">{{ a.when }}</span>
                   </li>
+                } @empty {
+                  <li class="list__empty">No alerts.</li>
                 }
               </ul>
               <a class="card__footer" role="button" tabindex="0">View all alerts</a>
@@ -237,11 +290,18 @@ interface XTick { x: number; label: string; }
                     <span class="status" [attr.data-status]="d.status">{{ d.status }}</span>
                     <span class="list__meta">{{ d.when }}</span>
                   </li>
+                } @empty {
+                  <li class="list__empty">No recent deployments.</li>
                 }
               </ul>
               <a class="card__footer" role="button" tabindex="0">View all deployments</a>
             </article>
           </section>
+        } @else {
+          <div class="state">
+            <h2>{{ activeNav() }}</h2>
+            <p>This module is coming soon.</p>
+          </div>
         }
       </main>
     </div>
@@ -374,7 +434,9 @@ interface XTick { x: number; label: string; }
         background: #ffffff;
         border-right: 1px solid var(--c-border);
         padding: var(--s-4) var(--s-3);
-        overflow-y: auto;
+        /* visible (not auto) so the AI Hub flyout can overflow to the right
+           without being clipped. The nav list fits without scrolling. */
+        overflow: visible;
       }
       .sidebar.is-collapsed { display: none; }
       .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -398,6 +460,53 @@ interface XTick { x: number; label: string; }
         background: var(--c-primary); border-radius: 0 3px 3px 0;
       }
       .nav-item__icon { color: inherit; opacity: 0.95; }
+
+      /* ---- AI Hub flyout ---- */
+      .nav-flyout { position: relative; }
+      .nav-item__caret {
+        margin-left: auto; transition: transform .18s ease; opacity: 0.7;
+      }
+      .nav-item.is-open .nav-item__caret { transform: rotate(90deg); }
+
+      .flyout {
+        position: absolute;
+        top: 0; left: calc(100% + 10px);
+        min-width: 200px;
+        background: #fff;
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-lg);
+        box-shadow: var(--shadow-3);
+        padding: var(--s-2);
+        z-index: 30;
+        display: flex; flex-direction: column; gap: 2px;
+        animation: flyout-in .14s ease both;
+      }
+      .flyout::before {
+        /* little arrow pointing back at the AI Hub item */
+        content: ""; position: absolute; left: -5px; top: 16px;
+        width: 10px; height: 10px; background: #fff;
+        border-left: 1px solid var(--c-border);
+        border-bottom: 1px solid var(--c-border);
+        transform: rotate(45deg);
+      }
+      @keyframes flyout-in {
+        from { opacity: 0; transform: translateX(-6px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+      .flyout__item {
+        display: flex; align-items: center; gap: var(--s-3);
+        padding: 9px 12px; border-radius: var(--r-md);
+        font-size: 0.875rem; color: var(--c-ink-2); font-weight: 500;
+        cursor: pointer; user-select: none; white-space: nowrap;
+        transition: background .15s ease, color .15s ease;
+      }
+      .flyout__item:hover { background: var(--c-bg-2); color: var(--c-ink-1); }
+      .flyout__item.is-active { background: var(--c-primary-soft); color: var(--c-primary); }
+      .flyout__icon { color: inherit; flex-shrink: 0; }
+
+      .flyout-backdrop {
+        position: fixed; inset: 0; z-index: 20; background: transparent;
+      }
 
       /* ============ Main ============ */
       .main {
@@ -572,6 +681,10 @@ interface XTick { x: number; label: string; }
         color: var(--c-ink-3); font-size: 0.75rem;
         font-variant-numeric: tabular-nums;
       }
+      .list__empty {
+        padding: 18px 0; text-align: center; color: var(--c-ink-4);
+        font-size: 0.85rem;
+      }
 
       .status {
         font-size: 0.6875rem; padding: 3px 8px; border-radius: var(--r-sm);
@@ -621,6 +734,8 @@ export class DashboardComponent implements OnInit {
 
   readonly sidebarCollapsed = signal(false);
   readonly activeNav = signal('Dashboard');
+  /** Label of the nav item whose flyout is currently open, or null. */
+  readonly openFlyout = signal<string | null>(null);
 
   readonly displayName = computed(() => {
     const p = this.profile();
@@ -630,7 +745,13 @@ export class DashboardComponent implements OnInit {
 
   readonly nav: NavItem[] = [
     { label: 'Dashboard',      icon: 'home' },
-    { label: 'Clouds',         icon: 'cloud' },
+    { label: 'Clouds',         icon: 'cloud', children: [
+      { label: 'VMware',    icon: 'vmware' },
+      { label: 'OpenStack', icon: 'openstack' },
+      { label: 'AWS',       icon: 'aws' },
+      { label: 'MS Azure',  icon: 'azure' },
+      { label: 'GCP',       icon: 'gcp' },
+    ] },
     { label: 'Clusters',       icon: 'cubes' },
     { label: 'Self Service',   icon: 'cart' },
     { label: 'App Blueprints', icon: 'clipboard' },
@@ -638,34 +759,32 @@ export class DashboardComponent implements OnInit {
     { label: 'FinOps',         icon: 'dollar' },
     { label: 'Integrations',   icon: 'puzzle' },
     { label: 'Access Control', icon: 'people' },
+    { label: 'AI Hub',         icon: 'aihub', children: [
+      { label: 'N8N Automation', icon: 'flow' },
+      { label: 'Token Factory',  icon: 'token' },
+      { label: 'AI Eval',        icon: 'eval' },
+    ] },
     { label: 'Settings',       icon: 'gear' },
   ];
 
+  // All values start at zero — populated once cloud environments are integrated.
   readonly kpis: KpiCard[] = [
-    { label: 'Total Clouds',   value: 4,   icon: 'cloud',   tone: 'blue'   },
-    { label: 'Total Clusters', value: 6,   icon: 'cubes',   tone: 'violet' },
-    { label: 'Total VMs',      value: 215, icon: 'monitor', tone: 'teal'   },
-    { label: 'Total Apps',     value: 32,  icon: 'grid',    tone: 'amber'  },
+    { label: 'Total Clouds',   value: 0, icon: 'cloud',   tone: 'blue'   },
+    { label: 'Total Clusters', value: 0, icon: 'cubes',   tone: 'violet' },
+    { label: 'Total VMs',      value: 0, icon: 'monitor', tone: 'teal'   },
+    { label: 'Total Apps',     value: 0, icon: 'grid',    tone: 'amber'  },
   ];
 
   readonly resourceSlices: ResourceSlice[] = [
-    { label: 'VMs',        pct: 55, color: '#3b82f6' },
-    { label: 'Containers', pct: 25, color: '#14b8a6' },
-    { label: 'Storage',    pct: 10, color: '#8b5cf6' },
-    { label: 'Others',     pct: 10, color: '#f59e0b' },
+    { label: 'VMs',        pct: 0, color: '#3b82f6' },
+    { label: 'Containers', pct: 0, color: '#14b8a6' },
+    { label: 'Storage',    pct: 0, color: '#8b5cf6' },
+    { label: 'Others',     pct: 0, color: '#f59e0b' },
   ];
 
-  readonly alerts: AlertItem[] = [
-    { text: 'High CPU usage on VM-02',                when: '2m ago',  severity: 'high'   },
-    { text: 'Cluster Dev-AKS has 2 nodes not ready',  when: '15m ago', severity: 'medium' },
-    { text: 'Azure expenses exceeded 80% of budget',  when: '1h ago',  severity: 'medium' },
-  ];
+  readonly alerts: AlertItem[] = [];
 
-  readonly deployments: DeploymentItem[] = [
-    { name: 'WebApp Blueprint', status: 'Success', when: '2h ago' },
-    { name: 'DB Stack',         status: 'Success', when: '5h ago' },
-    { name: 'K8s Cluster',      status: 'Running', when: '1d ago' },
-  ];
+  readonly deployments: DeploymentItem[] = [];
 
   /** Donut segments computed once from resourceSlices. */
   readonly donutSegs = computed<DonutSeg[]>(() => {
@@ -692,8 +811,8 @@ export class DashboardComponent implements OnInit {
   readonly chartPadT = 14;
   readonly chartPadB = 28;
 
-  // Approx monthly trend matching the wireframe (10 data points).
-  private readonly costSeries = [3, 6, 5, 10, 8, 12, 9, 13, 14, 16];
+  // Zeroed until cost data is integrated.
+  private readonly costSeries = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   private readonly maxCost = 16;
 
   readonly lineCoords = computed<LinePoint[]>(() => {
@@ -748,7 +867,26 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  setActive(label: string): void { this.activeNav.set(label); }
+  setActive(label: string): void {
+    this.activeNav.set(label);
+    this.openFlyout.set(null);
+  }
   toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
+
+  /** Open/close a nav item's floating submenu (Clouds, AI Hub). */
+  toggleFlyout(label: string, event: Event): void {
+    event.stopPropagation();
+    this.openFlyout.update(v => (v === label ? null : label));
+  }
+  /** Pick a submenu entry — becomes the active view and closes the flyout. */
+  selectChild(label: string): void {
+    this.activeNav.set(label);
+    this.openFlyout.set(null);
+  }
+  /** True when one of a parent's children is the active view (keeps parent highlighted). */
+  isChildActive(item: NavItem): boolean {
+    return !!item.children?.some(c => c.label === this.activeNav());
+  }
+
   logout(): void { this.auth.logout(); }
 }

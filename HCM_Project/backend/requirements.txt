@@ -8,3 +8,4 @@ psycopg[binary]
 python-jose[cryptography]==3.5.0
 ldap3
 email-validator
+pyvmomi
