@@ -14,10 +14,12 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.security import SecureHeadersMiddleware
 from app.db.base import Base
-from app.db.session import engine
+from app.db.bootstrap import run_bootstrap
+from app.db.session import SessionLocal, engine
 
-# Import models so SQLAlchemy registers them on Base.metadata before create_all.
-from app.models import user as _user_model  # noqa: F401
+# Import the models package so SQLAlchemy registers every model on Base.metadata
+# (tenants, users, roles, permissions, audit_logs) before create_all.
+from app import models as _models  # noqa: F401
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +58,12 @@ def create_app() -> FastAPI:
     def _startup() -> None:
         logger.info("Creating database tables if missing")
         Base.metadata.create_all(bind=engine)
+        # Seed permissions, system roles, default tenant, super admin; backfill users.
+        db = SessionLocal()
+        try:
+            run_bootstrap(db)
+        finally:
+            db.close()
         logger.info("HCM API ready on http://%s:%s", settings.APP_HOST, settings.APP_PORT)
 
     @app.get("/", include_in_schema=False)

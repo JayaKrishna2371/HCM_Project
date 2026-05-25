@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth.service';
 import { UserService } from '../../core/services/user.service';
@@ -45,6 +46,7 @@ interface XTick { x: number; label: string; }
         <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 20c.5-3 3-5 6-5s5.5 2 6 5 M14 20c.4-2 2-3.5 3.5-3.5S20.6 18 21 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
         <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
         <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 21h8 M12 17v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
         <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
         <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z M12 10v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><circle cx="12" cy="18" r="0.7" fill="currentColor"/></symbol>
         <symbol id="i-deploy" viewBox="0 0 24 24"><path d="M3 7h13l5 5v5H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
@@ -158,6 +160,16 @@ interface XTick { x: number; label: string; }
                 <span class="nav-item__label">{{ item.label }}</span>
               </a>
             }
+          }
+
+          <!-- Administration — role-gated, routes to the lazy module -->
+          @if (showAdmin()) {
+            <a class="nav-item nav-item--admin"
+               (click)="goAdmin()"
+               role="button" tabindex="0">
+              <svg class="nav-item__icon" width="20" height="20"><use href="#i-shield"></use></svg>
+              <span class="nav-item__label">Administration</span>
+            </a>
           }
         </nav>
       </aside>
@@ -460,6 +472,12 @@ interface XTick { x: number; label: string; }
         background: var(--c-primary); border-radius: 0 3px 3px 0;
       }
       .nav-item__icon { color: inherit; opacity: 0.95; }
+      .nav-item--admin {
+        margin-top: 8px; padding-top: 13px;
+        border-top: 1px solid var(--c-border-soft);
+        color: var(--c-primary); font-weight: 600;
+      }
+      .nav-item--admin:hover { background: var(--c-primary-soft); }
 
       /* ---- AI Hub flyout ---- */
       .nav-flyout { position: relative; }
@@ -727,6 +745,10 @@ interface XTick { x: number; label: string; }
 export class DashboardComponent implements OnInit {
   private readonly users = inject(UserService);
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
+  /** Administration entry is shown only to SUPER_ADMIN / TENANT_ADMIN. */
+  readonly showAdmin = computed(() => this.auth.isAdmin());
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -882,6 +904,10 @@ export class DashboardComponent implements OnInit {
   selectChild(label: string): void {
     this.activeNav.set(label);
     this.openFlyout.set(null);
+  }
+  /** Leave the dashboard for the lazy-loaded Administration module. */
+  goAdmin(): void {
+    this.router.navigateByUrl('/administration');
   }
   /** True when one of a parent's children is the active view (keeps parent highlighted). */
   isChildActive(item: NavItem): boolean {

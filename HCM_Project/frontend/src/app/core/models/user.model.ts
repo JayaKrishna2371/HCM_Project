@@ -8,6 +8,9 @@ export interface UserProfile {
   given_name?: string | null;
   family_name?: string | null;
   roles: string[];
+  // Multi-tenancy: tenant the user belongs to (null for SUPER_ADMIN).
+  tenant_id?: string | null;
+  status?: string | null;
   last_login_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -21,4 +24,30 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
-export type AppRole = 'Admin' | 'Operator' | 'Viewer' | string;
+/**
+ * Claims embedded in the backend-issued JWT. tenant_id / role / permissions are
+ * the authorization context the SPA reads to gate menus and routes; the backend
+ * remains the source of truth and re-checks every request.
+ */
+export interface TokenClaims {
+  sub: string;
+  tenant_id?: string | null;
+  role?: string | null;
+  roles?: string[];
+  permissions?: string[];
+  name?: string | null;
+  email?: string | null;
+  username?: string | null;
+  exp?: number;
+}
+
+export type AppRole =
+  | 'SUPER_ADMIN'
+  | 'TENANT_ADMIN'
+  | 'APPROVER'
+  | 'USER'
+  | 'READ_ONLY'
+  | string;
+
+export const SUPER_ADMIN = 'SUPER_ADMIN';
+export const TENANT_ADMIN = 'TENANT_ADMIN';

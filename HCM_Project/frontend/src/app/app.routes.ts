@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/guards/auth.guard';
 import { roleGuard } from './core/guards/role.guard';
+import { adminGuard } from './core/guards/permission.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
@@ -27,6 +28,15 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
     title: 'Admin — Hybrid Cloud Portal',
+  },
+
+  {
+    // Lazy-loaded Administration module (platform & tenant management).
+    // adminGuard restricts the whole area to SUPER_ADMIN / TENANT_ADMIN.
+    path: 'administration',
+    canActivate: [authGuard, adminGuard],
+    loadChildren: () =>
+      import('./features/administration/administration.routes').then((m) => m.ADMINISTRATION_ROUTES),
   },
 
   {

@@ -11,19 +11,21 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core import rbac
 from app.core.config import settings
 from app.core.ldap_auth import LDAPAuthError, LDAPConfigError, authenticate
 from app.core.security import TokenError, create_access_token, decode_access_token
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
+from app.models.tenant import TenantStatus
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenIntrospectionResponse, TokenResponse
 from app.schemas.user import UserRead
-from app.services import user_service
+from app.services import audit_service, rbac_service, tenant_service, user_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,10 @@ _bearer = HTTPBearer(auto_error=True)
     response_model=TokenResponse,
     summary="Authenticate against Active Directory (LDAP) and receive a session token",
 )
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    # NOTE: per-tenant "Own LDAP" routing is Phase 3 — Phase 1 authenticates every
+    # tenant against the platform LDAP config. The tenant.login_type is stored and
+    # surfaced for that future work.
     try:
         profile = authenticate(body.username, body.password)
     except LDAPConfigError as e:
@@ -47,22 +52,71 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Authentication is not configured correctly. Contact your administrator.",
         ) from e
     except LDAPAuthError as e:
+        audit_service.record(
+            db, action="auth.login", status="FAILURE",
+            actor_username=body.username, detail={"reason": str(e)}, request=request,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
 
-    user = user_service.upsert_from_ldap(db, profile)
+    # AD verified the password. Authorization comes from the DB (RBAC).
+    user = user_service.resolve_login_user(db, profile)
+    if user is None:
+        audit_service.record(
+            db, action="auth.login", status="DENIED",
+            actor_username=body.username, detail={"reason": "not provisioned"}, request=request,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not provisioned for this platform. Contact your administrator.",
+        )
+
+    if not user_service.is_active(user):
+        audit_service.record(
+            db, action="auth.login", status="DENIED", tenant_id=user.tenant_id,
+            actor_user_id=user.id, actor_username=user.username,
+            detail={"reason": "user disabled"}, request=request,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your account is disabled.")
+
+    # Reject login into a suspended/inactive tenant (super admins have no tenant).
+    if user.tenant_id is not None:
+        tenant = tenant_service.get_tenant(db, user.tenant_id)
+        if tenant is not None and tenant.status != TenantStatus.ACTIVE:
+            audit_service.record(
+                db, action="auth.login", status="DENIED", tenant_id=user.tenant_id,
+                actor_user_id=user.id, actor_username=user.username,
+                detail={"reason": f"tenant {tenant.status.value}"}, request=request,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your organization is not active. Contact your administrator.",
+            )
+
+    permissions = rbac_service.permissions_for_role_codes(db, user.roles or [], tenant_id=user.tenant_id)
+    primary_role = (user.roles or [None])[0]
 
     token = create_access_token(
         subject=user.directory_id,
         roles=user.roles or [],
         extra_claims={
+            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
+            "role": primary_role,
+            "permissions": permissions,
             "name": user.name,
             "email": user.email,
             "username": user.username,
         },
+    )
+
+    audit_service.record(
+        db, action="auth.login", status="SUCCESS", tenant_id=user.tenant_id,
+        actor_user_id=user.id, actor_username=user.username,
+        detail={"role": primary_role, "super_admin": rbac.is_super_admin(user.roles)},
+        request=request,
     )
 
     return TokenResponse(

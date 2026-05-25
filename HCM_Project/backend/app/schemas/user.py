@@ -1,6 +1,7 @@
 """Pydantic schemas for User."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -22,6 +23,9 @@ class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # Multi-tenancy: which tenant the user belongs to (NULL for SUPER_ADMIN).
+    tenant_id: Optional[uuid.UUID] = None
+    status: str = "ACTIVE"
     last_login_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

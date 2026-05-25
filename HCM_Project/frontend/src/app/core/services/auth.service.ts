@@ -4,7 +4,13 @@ import { Router } from '@angular/router';
 import { Observable, firstValueFrom, tap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { LoginResponse, UserProfile } from '../models/user.model';
+import {
+  LoginResponse,
+  SUPER_ADMIN,
+  TENANT_ADMIN,
+  TokenClaims,
+  UserProfile,
+} from '../models/user.model';
 import { ToastService } from './toast.service';
 
 interface StoredSession {
@@ -37,6 +43,17 @@ export class AuthService {
   private readonly _profile = signal<UserProfile | null>(null);
   readonly profile = this._profile.asReadonly();
   readonly isAuthenticated = computed(() => this._profile() !== null);
+
+  // Authorization context decoded from the JWT (backend re-checks every call).
+  private readonly _claims = signal<TokenClaims | null>(null);
+  readonly claims = this._claims.asReadonly();
+  readonly permissions = computed<string[]>(() => this._claims()?.permissions ?? []);
+  readonly primaryRole = computed<string | null>(() => this._claims()?.role ?? null);
+  /** The user's home tenant id (null for SUPER_ADMIN). */
+  readonly homeTenantId = computed<string | null>(() => this._claims()?.tenant_id ?? null);
+  readonly isSuperAdmin = computed(() => this.hasRole(SUPER_ADMIN));
+  /** Shows the Administration menu: SUPER_ADMIN or TENANT_ADMIN. */
+  readonly isAdmin = computed(() => this.hasRole(SUPER_ADMIN) || this.hasRole(TENANT_ADMIN));
 
   private token: string | null = null;
   private expiresAt = 0;
@@ -78,6 +95,23 @@ export class AuthService {
     return this._profile()?.roles ?? [];
   }
 
+  /** True if the user holds the given role (case-insensitive). */
+  hasRole(role: string): boolean {
+    const want = role.toLowerCase();
+    return this.roles().some((r) => r.toLowerCase() === want);
+  }
+
+  /** True if the user holds the permission (wildcard '*' grants everything). */
+  hasPermission(code: string): boolean {
+    const perms = this.permissions();
+    return perms.includes('*') || perms.includes(code);
+  }
+
+  /** True if the user holds ANY of the given permissions. */
+  hasAnyPermission(...codes: string[]): boolean {
+    return codes.some((c) => this.hasPermission(c));
+  }
+
   /** Tell the backend (best effort) then clear local session and route to /login. */
   logout(): void {
     if (this.token) {
@@ -105,6 +139,7 @@ export class AuthService {
     this.token = res.access_token;
     this.expiresAt = expiresAt;
     this._profile.set(res.user);
+    this._claims.set(this.decodeClaims(res.access_token));
 
     // Write to the chosen store; clear the other so only one copy exists.
     const store = remember ? localStorage : sessionStorage;
@@ -131,7 +166,19 @@ export class AuthService {
     this.token = session.token;
     this.expiresAt = session.expiresAt;
     this._profile.set(session.profile);
+    this._claims.set(this.decodeClaims(session.token));
     this.scheduleExpiry();
+  }
+
+  /** Decode the JWT payload (no verification — backend verifies on every call). */
+  private decodeClaims(token: string): TokenClaims | null {
+    try {
+      const payload = token.split('.')[1];
+      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(decodeURIComponent(escape(json))) as TokenClaims;
+    } catch {
+      return null;
+    }
   }
 
   private readSession(): StoredSession | null {
@@ -173,6 +220,7 @@ export class AuthService {
     this.token = null;
     this.expiresAt = 0;
     this._profile.set(null);
+    this._claims.set(null);
     if (this.expiryTimer) {
       clearTimeout(this.expiryTimer);
       this.expiryTimer = null;

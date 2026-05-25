@@ -123,6 +123,35 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_LEEWAY_SECONDS: int = 30
 
+    # ============================================================
+    #  Multi-tenancy / RBAC
+    # ============================================================
+    # Default tenant that pre-existing (and, in dev, auto-provisioned) users are
+    # mapped to. Keeps current LDAP logins working after the migration.
+    DEFAULT_TENANT_CODE: str = "DEFAULT"
+    DEFAULT_TENANT_NAME: str = "Default Organization"
+
+    # When TRUE (production posture): a user must already be provisioned in the DB
+    # by an admin to log in — unknown LDAP users are rejected.
+    # When FALSE (dev default): unknown-but-authenticated LDAP users are
+    # auto-provisioned into the default tenant with DEFAULT_USER_ROLE, preserving
+    # the application's current behaviour.
+    AUTH_REQUIRE_DB_PROVISIONING: bool = False
+    # Role granted to auto-provisioned users (dev mode only).
+    DEFAULT_USER_ROLE: str = "USER"
+
+    # Header a SUPER_ADMIN may send to act within a specific tenant's context.
+    TENANT_HEADER: str = "X-Tenant-Id"
+
+    # ----- Bootstrap SUPER_ADMIN -----
+    # Seeded on startup if no platform super-admin exists yet. Leave the username
+    # empty to skip seeding (e.g. once a real super admin has been created). The
+    # value must match the directory id / username the user authenticates with so
+    # that their first LDAP login is recognised as the platform admin.
+    SUPER_ADMIN_USERNAME: str | None = None
+    SUPER_ADMIN_EMAIL: str | None = None
+    SUPER_ADMIN_NAME: str = "Platform Super Admin"
+
     # ----- Database -----
     DATABASE_URL: str
 

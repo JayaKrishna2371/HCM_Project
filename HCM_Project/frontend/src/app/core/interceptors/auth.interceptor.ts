@@ -14,6 +14,7 @@ import { inject } from '@angular/core';
 
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../services/auth.service';
+import { TenantContextService } from '../services/tenant-context.service';
 
 export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
@@ -24,9 +25,21 @@ export const authInterceptor: HttpInterceptorFn = (
     return next(req);
   }
 
-  const token = inject(AuthService).getAccessToken();
-  const authed = token
-    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-    : req;
-  return next(authed);
+  const auth = inject(AuthService);
+  const tenantCtx = inject(TenantContextService);
+  const token = auth.getAccessToken();
+
+  if (!token) {
+    return next(req);
+  }
+
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  // SUPER_ADMIN tenant switching: tell the backend which tenant to scope to.
+  if (tenantCtx.isSwitched()) {
+    const tid = tenantCtx.activeTenantId();
+    if (tid) {
+      headers['X-Tenant-Id'] = tid;
+    }
+  }
+  return next(req.clone({ setHeaders: headers }));
 };

@@ -249,7 +249,7 @@ export class VmwareComponent {
   download(key: ResourceKey): void {
     const r = this.result();
     if (!r) return;
-    const rows = r[key] as Record<string, unknown>[];
+    const rows = r[key] as unknown as Record<string, unknown>[];
     this.downloadCsv(`vmware-${key}-${r.vcenter.host}.csv`, rows);
   }
 

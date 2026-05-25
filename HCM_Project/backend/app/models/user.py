@@ -1,4 +1,9 @@
-"""User ORM model — local mirror of Active Directory identities."""
+"""User ORM model — local mirror of Active Directory identities.
+
+Multi-tenancy: every user belongs to exactly one tenant (``tenant_id``), except
+the platform ``SUPER_ADMIN`` whose ``tenant_id`` is NULL. The tenant binding is
+the anchor for row-level isolation across the platform.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,12 +13,20 @@ from sqlalchemy import JSON, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.mixins import TenantScopedMixin
 
 
-class User(Base):
+class UserStatus:
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
+class User(Base, TenantScopedMixin):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # tenant_id (nullable) is provided by TenantScopedMixin. NULL => SUPER_ADMIN.
 
     # Stable AD identifier — objectGUID (falls back to UPN/sAMAccountName).
     directory_id: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
@@ -27,8 +40,14 @@ class User(Base):
     given_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     family_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
 
-    # Roles derived from AD group membership at last login.
+    # Effective application role codes (DB-managed RBAC). Kept as JSON for
+    # backward compatibility with require_roles(); the role→permission expansion
+    # lives in app.services.rbac_service.
     roles: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
+
+    # Account lifecycle within the tenant (ACTIVE | INACTIVE). Disabled users are
+    # rejected at login even if AD still authenticates them.
+    status: Mapped[str] = mapped_column(String(16), default="ACTIVE", nullable=False)
 
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
