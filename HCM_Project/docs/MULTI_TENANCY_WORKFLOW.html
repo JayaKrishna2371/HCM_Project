@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HCM Portal — Multi-Tenancy Workflow &amp; Architecture (Working Model)</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-d:#1d4ed8; --primary-soft:#eff5ff;
+    --ink1:#0f172a; --ink2:#334155; --ink3:#64748b; --ink4:#94a3b8;
+    --bg:#f6f8fc; --bg2:#f1f5f9; --border:#e2e8f0; --border-soft:#eef2f7;
+    --ok:#15803d; --ok-soft:#ecfdf3; --warn:#b45309; --warn-soft:#fef3c7;
+    --danger:#b91c1c; --danger-soft:#fee2e2; --violet:#7c3aed; --teal:#0d9488;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink1);
+    font-family:'Segoe UI',Inter,-apple-system,BlinkMacSystemFont,Roboto,sans-serif;
+    font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .page{ max-width:1000px; margin:0 auto; padding:28px 36px; }
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;}
+  h2{font-size:18px;margin:0 0 14px;letter-spacing:-.01em;border-left:4px solid var(--primary);padding-left:10px;}
+  h3{font-size:14px;margin:0 0 8px;color:var(--ink2);}
+  p{margin:0 0 10px;color:var(--ink2);}
+  .sub{color:var(--ink3);font-size:12px;}
+  .muted{color:var(--ink3);}
+  code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-family:'Consolas',monospace;font-size:11.5px;color:var(--ink1);}
+
+  /* Header band */
+  .hero{
+    background:linear-gradient(120deg,#0b1e3f 0%,#1d3a6e 55%,#2563eb 100%);
+    color:#fff; border-radius:16px; padding:26px 30px; margin-bottom:22px;
+  }
+  .hero h1{color:#fff;}
+  .hero .sub{color:#cfe0ff;}
+  .hero .tags{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;}
+  .hero .tag{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);
+    padding:4px 11px;border-radius:999px;font-size:11px;font-weight:600;}
+
+  section{ background:#fff;border:1px solid var(--border);border-radius:14px;
+    padding:22px 24px;margin-bottom:18px;box-shadow:0 1px 2px rgba(15,23,42,.04); }
+
+  table{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 4px;}
+  th{ text-align:left;padding:8px 10px;background:var(--bg2);color:var(--ink3);
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);}
+  td{padding:8px 10px;border-bottom:1px solid var(--border-soft);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+
+  /* Diagram primitives */
+  .box{ border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff;
+    font-size:11.5px;text-align:center;line-height:1.35; }
+  .box b{display:block;font-size:12px;color:var(--ink1);margin-bottom:2px;}
+  .box small{color:var(--ink3);font-size:10.5px;}
+  .box--p{border-color:var(--primary);background:var(--primary-soft);}
+  .box--ok{border-color:#86c9a3;background:var(--ok-soft);}
+  .box--warn{border-color:#e7c277;background:var(--warn-soft);}
+  .box--violet{border-color:#c4b5fd;background:#f3eeff;}
+  .box--data{border-color:#94a3b8;background:#f8fafc;}
+  .arrow{ text-align:center;color:var(--ink4);font-size:18px;line-height:1;margin:5px 0; }
+  .arrow.h{display:inline-block;margin:0 4px;}
+
+  .lane{ display:grid;grid-template-columns:120px 1fr;gap:0;border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;margin-bottom:8px; }
+  .lane__a{background:var(--bg2);padding:10px 12px;font-weight:700;font-size:11px;display:flex;align-items:center;}
+  .lane__b{padding:10px 12px;font-size:11.5px;color:var(--ink2);}
+
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;}
+  .pipe .box{flex:1;min-width:120px;}
+  .pipe .sep{display:flex;align-items:center;color:var(--ink4);font-size:18px;padding:0 4px;}
+
+  .chip{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;}
+  .chip--ok{background:var(--ok-soft);color:var(--ok);}
+  .chip--warn{background:var(--warn-soft);color:var(--warn);}
+  .chip--todo{background:var(--bg2);color:var(--ink3);}
+  .perm{display:inline-block;font-size:10px;background:var(--primary-soft);color:var(--primary);
+    padding:1px 6px;border-radius:5px;margin:1px 2px;font-family:'Consolas',monospace;}
+
+  .step{display:flex;gap:10px;margin-bottom:9px;align-items:flex-start;}
+  .step__n{flex:0 0 22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;
+    font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .step__t{font-size:12px;color:var(--ink2);}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--ink3);margin-top:8px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+  footer{color:var(--ink4);font-size:11px;text-align:center;padding:10px 0 4px;}
+
+  @media print{
+    body{background:#fff;font-size:12px;}
+    .page{padding:0;max-width:none;}
+    section{break-inside:avoid;box-shadow:none;}
+    .hero{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .box,.chip,.perm,.hero,th,.lane__a,.step__n{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .pagebreak{break-before:page;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="hero">
+    <h1>Enterprise Multi-Tenancy — Workflow &amp; Architecture</h1>
+    <div class="sub">HCM Hybrid Cloud Portal · Current working model (Phase 1 backend + Phase 2 Administration UI, verified)</div>
+    <div class="tags">
+      <span class="tag">FastAPI + PostgreSQL</span>
+      <span class="tag">Angular 17</span>
+      <span class="tag">Shared schema + tenant_id</span>
+      <span class="tag">DB-managed RBAC</span>
+      <span class="tag">LDAP authentication</span>
+      <span class="tag">JWT sessions</span>
+    </div>
+  </div>
+
+  <!-- 1. OVERVIEW -->
+  <section>
+    <h2>1 · What this is</h2>
+    <p>A single deployment that securely serves many isolated <b>Business Units (tenants)</b>. Identity is verified
+       against Active Directory over LDAP; the database is the source of truth for which tenant a user belongs to
+       and what they may do. Every API call is scoped to the caller's tenant.</p>
+    <table>
+      <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+      <tr><td>Data isolation</td><td>Shared DB + shared schema + <code>tenant_id</code> (row-level)</td><td>Scales to many BUs; one schema; central enforcement</td></tr>
+      <tr><td>Authentication</td><td>LDAP / Active Directory bind</td><td>No passwords stored in the app</td></tr>
+      <tr><td>Authorization</td><td>DB-managed roles &amp; permissions</td><td>Admins assign roles; clean audit; no AD-group sprawl</td></tr>
+      <tr><td>Tenant context</td><td>JWT <code>tenant_id</code> (+ <code>X-Tenant-Id</code> for super-admin switch)</td><td>Identity-based, single URL — not subdomain-based</td></tr>
+      <tr><td>Tenant nesting</td><td>None (flat tenants)</td><td>Simpler isolation; per requirement</td></tr>
+    </table>
+  </section>
+
+  <!-- 2. ARCHITECTURE -->
+  <section>
+    <h2>2 · System architecture</h2>
+    <div class="grid3" style="align-items:stretch;">
+      <div>
+        <div class="box box--p"><b>Angular SPA</b><small>one URL for all tenants</small></div>
+        <div style="margin-top:8px;">
+          <div class="box" style="margin-bottom:6px;">Login screen</div>
+          <div class="box" style="margin-bottom:6px;">Dashboard (business modules)</div>
+          <div class="box box--violet" style="margin-bottom:6px;">Administration module<small>lazy, role-gated</small></div>
+          <div class="box box--data">JWT interceptor<small>Bearer + X-Tenant-Id</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="box box--p"><b>FastAPI backend</b><small>scopes every request</small></div>
+        <div style="margin-top:8px;">
+          <div class="box" style="margin-bottom:6px;">Secure headers + CORS</div>
+          <div class="box" style="margin-bottom:6px;">/auth — LDAP bind &rarr; issue JWT</div>
+          <div class="box box--violet" style="margin-bottom:6px;">Tenant context + permission guards</div>
+          <div class="box" style="margin-bottom:6px;">/admin — tenants · users · roles · audit</div>
+          <div class="box box--data">Tenant-filtered services</div>
+        </div>
+      </div>
+      <div>
+        <div class="box box--warn"><b>Active Directory</b><small>LDAP — verifies passwords</small></div>
+        <div class="arrow">&#8597;</div>
+        <div class="box box--data"><b>PostgreSQL</b><small>shared schema</small></div>
+        <div style="margin-top:8px;">
+          <div class="box box--data" style="margin-bottom:6px;">tenants</div>
+          <div class="box box--data" style="margin-bottom:6px;">users &middot; <code>tenant_id</code></div>
+          <div class="box box--data" style="margin-bottom:6px;">roles &middot; permissions</div>
+          <div class="box box--data">audit_logs &middot; <code>tenant_id</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--primary)"></i> request path</span>
+      <span><i class="dot" style="background:var(--violet)"></i> isolation / RBAC layer</span>
+      <span><i class="dot" style="background:#94a3b8"></i> data</span>
+      <span><i class="dot" style="background:#e7c277"></i> identity provider</span>
+    </div>
+  </section>
+
+  <!-- 3. STARTUP -->
+  <section>
+    <h2>3 · Startup &amp; bootstrap (one-time, idempotent)</h2>
+    <div class="pipe">
+      <div class="box">uvicorn boots</div>
+      <div class="sep">&#9654;</div>
+      <div class="box">create tables</div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--p">seed 25 permissions<br>+ 5 system roles</div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--p">ensure DEFAULT tenant</div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--violet">seed SUPER_ADMIN<small>(from env)</small></div>
+    </div>
+    <p class="sub" style="margin-top:10px;">Re-runs safely on every restart — it only fills gaps and never duplicates. This solves the
+       "first admin" problem: a super admin must exist before any tenant can be onboarded.</p>
+  </section>
+
+  <!-- 4. LOGIN FLOW -->
+  <section class="pagebreak">
+    <h2>4 · Login &amp; token flow</h2>
+    <p class="sub">The same path for every role. <b>LDAP proves who you are; the database decides your tenant and role.</b></p>
+    <div class="lane"><div class="lane__a">User</div><div class="lane__b">Submits <code>username</code> + <code>password</code> to <code>POST /auth/login</code></div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">Backend &rarr; AD</div><div class="lane__b">LDAP <b>bind</b> verifies the password &amp; reads directory attributes (no password is stored)</div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">Resolve user</div><div class="lane__b">
+        Match by <code>directory_id</code> &rarr; else <b>claim</b> an admin-pre-created row by username (binds the real AD GUID)
+        &rarr; else <i>dev:</i> auto-provision as USER in DEFAULT / <i>prod:</i> reject</div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">Checks</div><div class="lane__b">User <b>ACTIVE</b>? Tenant <b>ACTIVE</b>? &mdash; otherwise 403 (audited)</div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">RBAC</div><div class="lane__b">Expand the user's DB roles &rarr; effective permission list</div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">Issue JWT</div><div class="lane__b">
+        <code>{ sub, tenant_id, role, roles[], permissions[], name, email }</code> &middot; login event written to <code>audit_logs</code></div></div>
+    <div class="arrow">&#9660;</div>
+    <div class="lane"><div class="lane__a">SPA</div><div class="lane__b">Stores token; decodes claims to gate menus &amp; routes</div></div>
+  </section>
+
+  <!-- 5. AUTHZ PIPELINE -->
+  <section>
+    <h2>5 · Per-request authorization pipeline</h2>
+    <div class="pipe">
+      <div class="box">Request<small>Bearer + X-Tenant-Id?</small></div>
+      <div class="sep">&#9654;</div>
+      <div class="box">Verify JWT<small>load user</small></div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--violet">Resolve effective tenant</div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--violet">require_permissions()<small>'*' bypasses</small></div>
+      <div class="sep">&#9654;</div>
+      <div class="box box--data">Query filtered by tenant_id</div>
+    </div>
+    <div class="grid2" style="margin-top:12px;">
+      <div class="box" style="text-align:left;"><b>Tenant user</b><small style="display:block;margin-top:4px;">Pinned to their own tenant. A mismatched <code>X-Tenant-Id</code> &rarr; <b>403</b> (cross-tenant blocked).</small></div>
+      <div class="box" style="text-align:left;"><b>Super admin</b><small style="display:block;margin-top:4px;">Platform-wide by default; may opt into a tenant via <code>X-Tenant-Id</code> (tenant switch).</small></div>
+    </div>
+    <p class="sub" style="margin-top:10px;"><b>Verified:</b> cross-tenant access &rarr; 403 · privilege escalation (tenant admin granting SUPER_ADMIN) &rarr; 403 · tenant-scoped audit reads.</p>
+  </section>
+
+  <!-- 6. ROLES -->
+  <section>
+    <h2>6 · Roles &amp; permissions (RBAC)</h2>
+    <table>
+      <tr><th>Role</th><th>Scope</th><th>tenant_id</th><th>Can do</th></tr>
+      <tr><td><b>SUPER_ADMIN</b></td><td>Platform</td><td>null</td><td>Everything (<span class="perm">*</span>): onboard/activate tenants, create admins, all logs, global settings, switch tenant</td></tr>
+      <tr><td><b>TENANT_ADMIN</b></td><td>One tenant</td><td>set</td><td>Own tenant only: <span class="perm">user:*</span><span class="perm">role:*</span><span class="perm">audit:read</span><span class="perm">tenant_settings:*</span> — no tenant create, no platform settings</td></tr>
+      <tr><td><b>APPROVER</b></td><td>One tenant</td><td>set</td><td>Read + approve within tenant</td></tr>
+      <tr><td><b>USER</b></td><td>One tenant</td><td>set</td><td><span class="perm">infra:read</span><span class="perm">tenant_settings:read</span> — dashboards/resources</td></tr>
+      <tr><td><b>READ_ONLY</b></td><td>One tenant</td><td>set</td><td>Read-only within tenant</td></tr>
+      <tr><td><b>CUSTOM_ROLE</b></td><td>One tenant</td><td>set</td><td>Tenant-defined from the permission catalog</td></tr>
+    </table>
+  </section>
+
+  <!-- 7. PROVISIONING CHAIN -->
+  <section>
+    <h2>7 · Provisioning lifecycle (who creates whom)</h2>
+    <div class="step"><div class="step__n">1</div><div class="step__t"><b>SUPER_ADMIN</b> (seeded at startup) logs in &mdash; recognised via <code>SUPER_ADMIN_USERNAME</code>.</div></div>
+    <div class="step"><div class="step__n">2</div><div class="step__t">Onboards a <b>tenant</b> (Tenant Management): code, name, login type, optional own-LDAP fields.</div></div>
+    <div class="step"><div class="step__n">3</div><div class="step__t">Creates a <b>TENANT_ADMIN</b> for that tenant (User Management) &mdash; by username; tenant bound automatically.</div></div>
+    <div class="step"><div class="step__n">4</div><div class="step__t"><b>TENANT_ADMIN</b> logs in (LDAP) &mdash; sees Administration scoped to their tenant only.</div></div>
+    <div class="step"><div class="step__n">5</div><div class="step__t">Creates tenant <b>USERS</b> (role bound to their own tenant; cannot grant SUPER_ADMIN).</div></div>
+    <div class="step"><div class="step__n">6</div><div class="step__t"><b>USER</b> logs in &mdash; dashboard + own-tenant data only; no Administration menu.</div></div>
+  </section>
+
+  <!-- 8. STATUS -->
+  <section>
+    <h2>8 · Status of the working model</h2>
+    <div class="grid2">
+      <div>
+        <h3>Built &amp; verified</h3>
+        <p><span class="chip chip--ok">DONE</span> Tenant / RBAC / audit schema + bootstrap seed</p>
+        <p><span class="chip chip--ok">DONE</span> LDAP login &rarr; JWT with tenant + permissions</p>
+        <p><span class="chip chip--ok">DONE</span> Tenant context + permission guards (cross-tenant 403)</p>
+        <p><span class="chip chip--ok">DONE</span> Admin APIs: tenants · users · roles · permissions · audit</p>
+        <p><span class="chip chip--ok">DONE</span> Angular Administration module (lazy, role-gated, tenant switch)</p>
+        <p><span class="chip chip--ok">DONE</span> Screens: Tenant, User, Role mgmt · Permissions · Audit</p>
+        <p><span class="chip chip--ok">DONE</span> Backend verified live; frontend build passes</p>
+      </div>
+      <div>
+        <h3>Pending / future</h3>
+        <p><span class="chip chip--warn">BLOCKER</span> Point <code>.env</code> LDAP at a real/test directory (placeholder now)</p>
+        <p><span class="chip chip--warn">BLOCKER</span> Set real <code>SUPER_ADMIN_USERNAME</code>; prod provisioning flag</p>
+        <p><span class="chip chip--todo">STUB</span> Sub-pages: LDAP Config · Tenant/Platform Settings · Infra · Access Control</p>
+        <p><span class="chip chip--todo">TODO</span> Delete endpoints (tenant/user) · role edit UI</p>
+        <p><span class="chip chip--todo">PHASE 3</span> Per-tenant "Own LDAP" login routing</p>
+        <p><span class="chip chip--todo">PHASE 3</span> PostgreSQL Row-Level Security backstop</p>
+        <p><span class="chip chip--todo">PHASE 3</span> Kubernetes namespace isolation + tenant_id on business tables</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>HCM Hybrid Cloud Portal &middot; Multi-Tenancy Working Model &middot; generated for architecture review</footer>
+</div>
+</body>
+</html>

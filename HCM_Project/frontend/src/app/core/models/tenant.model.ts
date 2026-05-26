@@ -6,6 +6,9 @@ export interface Tenant {
   tenant_code: string;
   tenant_name: string;
   login_type: LoginType;
+  is_master: boolean;
+  base_role: string;
+  user_count: number;
   ldap_server_url?: string | null;
   domain_name?: string | null;
   dc_name?: string | null;
@@ -19,6 +22,7 @@ export interface TenantCreate {
   tenant_code: string;
   tenant_name: string;
   login_type: LoginType;
+  base_role: string;
   ldap_server_url?: string | null;
   domain_name?: string | null;
   dc_name?: string | null;
@@ -27,6 +31,7 @@ export interface TenantCreate {
 export interface TenantUpdate {
   tenant_name?: string;
   login_type?: LoginType;
+  base_role?: string;
   ldap_server_url?: string | null;
   domain_name?: string | null;
   dc_name?: string | null;

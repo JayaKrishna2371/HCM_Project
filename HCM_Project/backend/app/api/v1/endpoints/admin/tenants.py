@@ -27,7 +27,14 @@ def list_tenants(
     else:
         tenant = tenant_service.get_tenant(db, ctx.require_tenant())
         tenants = [tenant] if tenant else []
-    return [TenantRead.model_validate(t) for t in tenants]
+
+    counts = tenant_service.user_counts_by_tenant(db)
+    out: List[TenantRead] = []
+    for t in tenants:
+        item = TenantRead.model_validate(t)
+        item.user_count = counts.get(t.id, 0)
+        out.append(item)
+    return out
 
 
 @router.post(
@@ -48,6 +55,7 @@ def create_tenant(
             tenant_code=body.tenant_code,
             tenant_name=body.tenant_name,
             login_type=body.login_type,
+            base_role=body.base_role,
             ldap_server_url=body.ldap_server_url,
             domain_name=body.domain_name,
             dc_name=body.dc_name,
@@ -103,3 +111,30 @@ def update_tenant(
         detail=body.model_dump(exclude_unset=True, mode="json"), request=request,
     )
     return TenantRead.model_validate(tenant)
+
+
+@router.delete(
+    "/{tenant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a tenant (SUPER_ADMIN only; master tenant is protected)",
+)
+def delete_tenant(
+    tenant_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permissions("tenant:delete")),
+) -> None:
+    tenant = tenant_service.get_tenant(db, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    try:
+        tenant_service.delete_tenant(db, tenant)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    audit_service.record(
+        db, action="tenant.delete", tenant_id=None,
+        actor_user_id=ctx.user_id, actor_username=ctx.username,
+        resource_type="tenant", resource_id=tenant_id,
+        detail={"tenant_code": tenant.tenant_code}, request=request,
+    )
+    return None

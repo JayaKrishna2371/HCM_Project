@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Platform Explained Simply — Multi-Tenancy</title>
+<style>
+  :root{
+    --primary:#2563eb;--primary-d:#1d4ed8;--ink1:#0f172a;--ink2:#334155;--ink3:#64748b;
+    --bg:#f6f8fc;--border:#e2e8f0;--soft:#eff5ff;
+    --finance:#2563eb;--hr:#0d9488;--sales:#d97706;--mgr:#7c3aed;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink1);
+    font-family:'Segoe UI',Inter,-apple-system,Roboto,sans-serif;font-size:14px;line-height:1.55;}
+  .page{max-width:960px;margin:0 auto;padding:26px 34px;}
+  h1{font-size:27px;margin:0 0 4px;}
+  h2{font-size:19px;margin:0 0 16px;border-left:5px solid var(--primary);padding-left:11px;}
+  p{margin:0 0 10px;color:var(--ink2);}
+  .hero{background:linear-gradient(120deg,#0b1e3f,#1d3a6e 55%,#2563eb);color:#fff;
+    border-radius:16px;padding:24px 30px;margin-bottom:20px;}
+  .hero h1{color:#fff;}.hero p{color:#d3e2ff;margin:0;font-size:15px;}
+  section{background:#fff;border:1px solid var(--border);border-radius:14px;padding:22px 26px;
+    margin-bottom:18px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+
+  /* Building analogy */
+  .building{display:grid;grid-template-columns:240px 1fr;gap:22px;align-items:center;}
+  .entry{display:flex;flex-direction:column;gap:10px;}
+  .card{border:2px solid var(--border);border-radius:12px;padding:12px 14px;text-align:center;background:#fff;}
+  .card .ico{font-size:30px;line-height:1;}
+  .card b{display:block;font-size:14px;margin:4px 0 2px;}
+  .card small{color:var(--ink3);font-size:11.5px;}
+  .down{text-align:center;font-size:22px;color:var(--ink3);}
+
+  .tower{border:3px solid #cbd5e1;border-radius:14px 14px 8px 8px;overflow:hidden;background:#fff;}
+  .roof{background:#ede9fe;border-bottom:3px solid #cbd5e1;padding:12px 16px;display:flex;
+    align-items:center;gap:12px;}
+  .floor{padding:14px 16px;border-bottom:2px dashed #cbd5e1;display:flex;align-items:center;gap:12px;}
+  .floor:last-child{border-bottom:none;}
+  .floor .ficon{font-size:24px;}
+  .floor .fname{font-weight:700;font-size:15px;}
+  .floor .ftag{margin-left:auto;font-size:11px;color:var(--ink3);background:#f1f5f9;
+    padding:3px 9px;border-radius:999px;}
+  .roof .fname{font-weight:700;font-size:15px;color:#6d28d9;}
+
+  /* People cards */
+  .people{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .person{border:2px solid var(--border);border-radius:14px;padding:16px;text-align:center;}
+  .person .ico{font-size:38px;}
+  .person h3{margin:6px 0 2px;font-size:16px;}
+  .person .role{font-size:11px;font-weight:700;color:var(--primary);letter-spacing:.04em;}
+  .person p{font-size:12.5px;color:var(--ink2);margin:8px 0 0;}
+  .p1{border-color:#c4b5fd;background:#faf8ff;} .p1 .role{color:#7c3aed;}
+  .p2{border-color:#bae6fd;background:#f5fbff;} .p2 .role{color:#0369a1;}
+  .p3{border-color:#bbf7d0;background:#f4fdf7;} .p3 .role{color:#15803d;}
+
+  /* Steps */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .stepc{border:2px solid var(--border);border-radius:12px;padding:14px;text-align:center;position:relative;}
+  .stepc .n{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;
+    font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;}
+  .stepc .ico{font-size:24px;}
+  .stepc b{display:block;font-size:13px;margin-top:6px;}
+  .stepc small{color:var(--ink3);font-size:11px;}
+
+  /* Setup order */
+  .order{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;}
+  .order .o{flex:1;min-width:150px;border:2px solid var(--border);border-radius:12px;padding:12px;text-align:center;}
+  .order .o .ico{font-size:24px;}
+  .order .o b{display:block;font-size:13px;margin:5px 0 2px;}
+  .order .o small{color:var(--ink3);font-size:11px;}
+  .order .ar{display:flex;align-items:center;font-size:22px;color:var(--ink3);padding:0 6px;}
+
+  .rule{background:#fff7ed;border:2px solid #fed7aa;border-radius:14px;padding:18px 22px;
+    display:flex;gap:14px;align-items:center;}
+  .rule .ico{font-size:34px;}
+  .rule b{font-size:16px;color:#9a3412;}
+  .rule p{margin:2px 0 0;color:#7c2d12;}
+
+  footer{color:#94a3b8;font-size:11px;text-align:center;padding:8px 0;}
+  @media print{body{background:#fff;}.page{padding:0;}section,.rule{break-inside:avoid;}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="hero">
+    <h1>The Platform, Explained Simply</h1>
+    <p>Multi-tenancy = <b>one secure building, many private offices</b>. One website for everyone — but your badge only opens your own floor.</p>
+  </div>
+
+  <!-- THE BIG PICTURE -->
+  <section>
+    <h2>The big picture</h2>
+    <div class="building">
+      <div class="entry">
+        <div class="card"><div class="ico">🧑</div><b>You arrive</b><small>username + password</small></div>
+        <div class="down">⬇</div>
+        <div class="card" style="border-color:#fcd34d;background:#fffbeb;"><div class="ico">💂</div><b>Security desk</b><small>Active Directory checks your ID</small></div>
+        <div class="down">⬇</div>
+        <div class="card" style="border-color:#93c5fd;background:#eff6ff;"><div class="ico">🪪</div><b>You get a badge</b><small>says your floor + what you can open</small></div>
+      </div>
+
+      <div>
+        <div class="tower">
+          <div class="roof"><span class="ficon">🏢</span><span class="fname">Rooftop — Building Manager</span><span class="ftag" style="background:#ede9fe;color:#6d28d9;">all floors</span></div>
+          <div class="floor"><span class="ficon">🏦</span><span class="fname" style="color:var(--finance)">Finance</span><span class="ftag">their floor only</span></div>
+          <div class="floor"><span class="ficon">👥</span><span class="fname" style="color:var(--hr)">HR</span><span class="ftag">their floor only</span></div>
+          <div class="floor"><span class="ficon">📈</span><span class="fname" style="color:var(--sales)">Sales</span><span class="ftag">their floor only</span></div>
+        </div>
+        <p style="margin-top:10px;text-align:center;font-size:12.5px;">Each company has a <b>private floor</b> (a “tenant”). Everyone uses the same front door,
+          but <b>no one can walk onto another company’s floor.</b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- THREE PEOPLE -->
+  <section>
+    <h2>Three kinds of people</h2>
+    <div class="people">
+      <div class="person p1">
+        <div class="ico">🏢</div>
+        <h3>Building Manager</h3>
+        <div class="role">SUPER ADMIN</div>
+        <p>Runs the whole building. Leases floors to new companies, appoints their managers, can visit any floor.</p>
+      </div>
+      <div class="person p2">
+        <div class="ico">🧑‍💼</div>
+        <h3>Floor Manager</h3>
+        <div class="role">TENANT ADMIN</div>
+        <p>Runs <b>one</b> floor — adds or removes their own staff and arranges their rooms. Cannot touch other floors.</p>
+      </div>
+      <div class="person p3">
+        <div class="ico">👤</div>
+        <h3>Employee</h3>
+        <div class="role">USER</div>
+        <p>Works on their floor and uses the rooms they’re allowed into. Manages no one.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW LOGIN WORKS -->
+  <section>
+    <h2>How logging in works</h2>
+    <div class="steps">
+      <div class="stepc"><div class="n">1</div><div class="ico">⌨️</div><b>Sign in</b><small>username + password</small></div>
+      <div class="stepc"><div class="n">2</div><div class="ico">💂</div><b>ID checked</b><small>Active Directory confirms it’s you</small></div>
+      <div class="stepc"><div class="n">3</div><div class="ico">🪪</div><b>Get a badge</b><small>your floor + what you can open</small></div>
+      <div class="stepc"><div class="n">4</div><div class="ico">🚪</div><b>Doors check it</b><small>you only see your own floor</small></div>
+    </div>
+  </section>
+
+  <!-- SETUP ORDER -->
+  <section>
+    <h2>How the building gets set up</h2>
+    <div class="order">
+      <div class="o"><div class="ico">🏢</div><b>1. Lease a floor</b><small>Manager onboards a new company (tenant)</small></div>
+      <div class="ar">➜</div>
+      <div class="o"><div class="ico">🧑‍💼</div><b>2. Appoint manager</b><small>creates that floor’s Floor Manager</small></div>
+      <div class="ar">➜</div>
+      <div class="o"><div class="ico">👤</div><b>3. Add staff</b><small>Floor Manager adds employees</small></div>
+      <div class="ar">➜</div>
+      <div class="o"><div class="ico">🪪</div><b>4. Everyone logs in</b><small>gets a badge, works on their floor</small></div>
+    </div>
+  </section>
+
+  <!-- GOLDEN RULE -->
+  <div class="rule">
+    <div class="ico">🔒</div>
+    <div>
+      <b>The golden rule</b>
+      <p>Your badge decides your floor — and the building <b>never</b> lets you onto someone else’s floor. This is checked at <b>every single door</b> (every action), not just at the entrance.</p>
+    </div>
+  </div>
+
+  <footer>HCM Hybrid Cloud Portal · Multi-Tenancy in plain English</footer>
+</div>
+</body>
+</html>

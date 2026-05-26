@@ -71,7 +71,9 @@ def create_user(
     if creating_super:
         if not ctx.is_super_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot create a SUPER_ADMIN")
-        target_tenant: Optional[uuid.UUID] = None  # platform-level
+        # Super admins belong to the master (HCAP) tenant.
+        from app.services import tenant_service
+        target_tenant: Optional[uuid.UUID] = tenant_service.get_or_create_default_tenant(db).id
     elif ctx.is_super_admin:
         # Super admin must say which tenant (header context or explicit body field).
         target_tenant = ctx.tenant_id or body.tenant_id
@@ -138,3 +140,28 @@ def update_user(
         detail=body.model_dump(exclude_unset=True), request=request,
     )
     return AdminUserRead.model_validate(user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a user")
+def delete_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permissions("user:delete")),
+) -> None:
+    user = _scoped_user_or_404(db, user_id, ctx)
+    if user.id == ctx.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
+    # Only a super admin may delete another super admin.
+    if rbac.is_super_admin(user.roles or []) and not ctx.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete a SUPER_ADMIN")
+    tenant_id = user.tenant_id
+    username = user.username
+    user_service.delete_user(db, user)
+    audit_service.record(
+        db, action="user.delete", tenant_id=tenant_id,
+        actor_user_id=ctx.user_id, actor_username=ctx.username,
+        resource_type="user", resource_id=user_id,
+        detail={"username": username}, request=request,
+    )
+    return None

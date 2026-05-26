@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS tenants (
     tenant_code     VARCHAR(64)  NOT NULL UNIQUE,
     tenant_name     VARCHAR(255) NOT NULL,
     login_type      VARCHAR(32)  NOT NULL DEFAULT 'PLATFORM_LDAP',
+    is_master       BOOLEAN      NOT NULL DEFAULT FALSE,
+    base_role       VARCHAR(64)  NOT NULL DEFAULT 'USER',
     ldap_server_url VARCHAR(512),
     domain_name     VARCHAR(255),
     dc_name         VARCHAR(255),
@@ -26,6 +28,9 @@ CREATE TABLE IF NOT EXISTS tenants (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+-- For pre-existing tenants tables:
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS is_master BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS base_role VARCHAR(64) NOT NULL DEFAULT 'USER';
 CREATE INDEX IF NOT EXISTS ix_tenants_tenant_code ON tenants (tenant_code);
 
 -- ---------------------------------------------------------------------
@@ -97,14 +102,14 @@ CREATE INDEX IF NOT EXISTS ix_users_tenant_id ON users (tenant_id);
 -- (system roles, permissions and the super admin are seeded by the app
 --  bootstrap; you may also seed them here if running app-less.)
 -- ---------------------------------------------------------------------
-INSERT INTO tenants (tenant_code, tenant_name, login_type, status, created_by)
-VALUES ('DEFAULT', 'Default Organization', 'PLATFORM_LDAP', 'ACTIVE', 'system')
+INSERT INTO tenants (tenant_code, tenant_name, login_type, is_master, base_role, status, created_by)
+VALUES ('HCAP', 'HCAP', 'PLATFORM_LDAP', TRUE, 'SUPER_ADMIN', 'ACTIVE', 'system')
 ON CONFLICT (tenant_code) DO NOTHING;
 
+-- Every tenant-less user (including super admins) joins the master tenant.
 UPDATE users
-   SET tenant_id = (SELECT id FROM tenants WHERE tenant_code = 'DEFAULT')
- WHERE tenant_id IS NULL
-   AND NOT (roles::text ILIKE '%SUPER_ADMIN%');
+   SET tenant_id = (SELECT id FROM tenants WHERE is_master = TRUE LIMIT 1)
+ WHERE tenant_id IS NULL;
 
 COMMIT;
 

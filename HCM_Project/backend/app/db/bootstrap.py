@@ -75,13 +75,11 @@ def _seed_system_roles(db: Session, perms: dict[str, Permission]) -> None:
     db.commit()
 
 
-def _backfill_users(db: Session, default_tenant_id) -> int:
-    """Map tenant-less, non-super-admin users into the default tenant."""
+def _backfill_users(db: Session, master_tenant_id) -> int:
+    """Map every tenant-less user (incl. super admins) into the master tenant."""
     count = 0
     for user in db.scalars(select(User).where(User.tenant_id.is_(None))).all():
-        if rbac.is_super_admin(user.roles or []):
-            continue  # SUPER_ADMIN stays platform-level (no tenant)
-        user.tenant_id = default_tenant_id
+        user.tenant_id = master_tenant_id
         if not user.roles:
             user.roles = [settings.DEFAULT_USER_ROLE]
         count += 1
@@ -90,7 +88,7 @@ def _backfill_users(db: Session, default_tenant_id) -> int:
     return count
 
 
-def _seed_super_admin(db: Session) -> None:
+def _seed_super_admin(db: Session, master_tenant_id) -> None:
     username = (settings.SUPER_ADMIN_USERNAME or "").strip()
     if not username:
         return
@@ -101,13 +99,13 @@ def _seed_super_admin(db: Session) -> None:
     existing = db.scalar(select(User).where(User.username == username))
     if existing is not None:
         existing.roles = [rbac.SUPER_ADMIN]
-        existing.tenant_id = None
+        existing.tenant_id = master_tenant_id  # super admin belongs to the master (HCAP) tenant
         existing.status = "ACTIVE"
     else:
         # Placeholder row; first LDAP login rebinds directory_id to the real GUID.
         db.add(
             User(
-                tenant_id=None,
+                tenant_id=master_tenant_id,
                 directory_id=username,
                 username=username,
                 email=settings.SUPER_ADMIN_EMAIL,
@@ -117,7 +115,7 @@ def _seed_super_admin(db: Session) -> None:
             )
         )
     db.commit()
-    logger.info("Seeded bootstrap SUPER_ADMIN: %s", username)
+    logger.info("Seeded bootstrap SUPER_ADMIN: %s (master tenant)", username)
 
 
 def run_bootstrap(db: Session) -> None:
@@ -126,8 +124,8 @@ def run_bootstrap(db: Session) -> None:
     _seed_system_roles(db, perms)
     tenant = tenant_service.get_or_create_default_tenant(db)
     moved = _backfill_users(db, tenant.id)
-    _seed_super_admin(db)
+    _seed_super_admin(db, tenant.id)
     logger.info(
-        "Bootstrap complete: %d permissions, %d system roles, default tenant=%s, %d users backfilled",
+        "Bootstrap complete: %d permissions, %d system roles, master tenant=%s, %d users backfilled",
         len(perms), len(rbac.SYSTEM_ROLES), tenant.tenant_code, moved,
     )

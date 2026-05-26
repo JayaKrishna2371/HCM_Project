@@ -170,6 +170,11 @@ def update_user(
     return user
 
 
+def delete_user(db: Session, user: User) -> None:
+    db.delete(user)
+    db.commit()
+
+
 def is_active(user: User) -> bool:
     return (user.status or "ACTIVE").upper() == "ACTIVE"
 

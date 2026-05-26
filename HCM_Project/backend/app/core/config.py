@@ -128,8 +128,10 @@ class Settings(BaseSettings):
     # ============================================================
     # Default tenant that pre-existing (and, in dev, auto-provisioned) users are
     # mapped to. Keeps current LDAP logins working after the migration.
-    DEFAULT_TENANT_CODE: str = "DEFAULT"
-    DEFAULT_TENANT_NAME: str = "Default Organization"
+    # The master organization (Morpheus-style "Master Tenant"). Platform/super
+    # admins belong to it; it cannot be deleted and is flagged is_master.
+    DEFAULT_TENANT_CODE: str = "HCAP"
+    DEFAULT_TENANT_NAME: str = "HCAP"
 
     # When TRUE (production posture): a user must already be provisioned in the DB
     # by an admin to log in — unknown LDAP users are rejected.

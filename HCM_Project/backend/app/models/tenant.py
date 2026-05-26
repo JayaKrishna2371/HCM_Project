@@ -5,6 +5,7 @@ import enum
 import uuid
 from typing import Optional
 
+from sqlalchemy import Boolean
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,6 +35,13 @@ class Tenant(Base, TimestampMixin):
     # Unique business-unit code / domain (e.g. "FINANCE", "acme.example.com").
     tenant_code: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     tenant_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Morpheus-style master tenant: exactly one (the HCAP org). Cannot be deleted.
+    is_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Default ("base") role assigned to the tenant's users — shown in the Tenants
+    # table "Role" column. Sub-tenant custom roles are scoped within this.
+    base_role: Mapped[str] = mapped_column(String(64), default="USER", nullable=False)
 
     login_type: Mapped[LoginType] = mapped_column(
         SAEnum(LoginType, name="login_type", native_enum=False, length=32),

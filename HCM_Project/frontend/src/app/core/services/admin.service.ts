@@ -27,6 +27,9 @@ export class AdminService {
   updateTenant(id: string, body: TenantUpdate): Observable<Tenant> {
     return this.http.patch<Tenant>(`${this.base}/tenants/${id}`, body);
   }
+  deleteTenant(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/tenants/${id}`);
+  }
 
   // ---- Users ----
   listUsers(): Observable<AdminUser[]> {
@@ -37,6 +40,9 @@ export class AdminService {
   }
   updateUser(id: number, body: AdminUserUpdate): Observable<AdminUser> {
     return this.http.patch<AdminUser>(`${this.base}/users/${id}`, body);
+  }
+  deleteUser(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/users/${id}`);
   }
 
   // ---- Roles & permissions ----
