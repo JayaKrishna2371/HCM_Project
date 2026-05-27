@@ -30,6 +30,8 @@ export class UserManagementComponent implements OnInit {
   readonly modal = signal<'create' | 'edit' | null>(null);
   readonly editing = signal<AdminUser | null>(null);
   readonly query = signal('');
+  /** SUPER_ADMIN tenant filter — '' means all tenants. */
+  readonly tenantFilter = signal<string>('');
 
   readonly canCreate = computed(() => this.auth.hasPermission('user:create'));
   readonly canUpdate = computed(() => this.auth.hasPermission('user:update'));
@@ -85,10 +87,23 @@ export class UserManagementComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.admin.listUsers().subscribe({
+    // SUPER_ADMIN: '' tenant filter => all tenants; otherwise the chosen tenant.
+    const scope = this.auth.isSuperAdmin() ? (this.tenantFilter() || null) : null;
+    this.admin.listUsers(scope).subscribe({
       next: (u) => { this.users.set(u); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  onTenantFilter(value: string): void {
+    this.tenantFilter.set(value);
+    this.load();
+  }
+
+  /** Tenant name for the table's Tenant column (super-admin all-tenants view). */
+  tenantName(id: string | null | undefined): string {
+    if (!id) return '—';
+    return this.tenants().find((t) => t.id === id)?.tenant_name ?? '—';
   }
 
   toggleRole(code: string): void {

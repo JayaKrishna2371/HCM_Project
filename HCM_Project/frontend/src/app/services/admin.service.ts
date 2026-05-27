@@ -32,8 +32,11 @@ export class AdminService {
   }
 
   // ---- Users ----
-  listUsers(): Observable<AdminUser[]> {
-    return this.http.get<AdminUser[]>(`${this.base}/users`);
+  /** SUPER_ADMIN: pass a tenantId to filter; omit for users across ALL tenants. */
+  listUsers(tenantId?: string | null): Observable<AdminUser[]> {
+    let params = new HttpParams();
+    if (tenantId) params = params.set('tenant_id', tenantId);
+    return this.http.get<AdminUser[]>(`${this.base}/users`, { params });
   }
   createUser(body: AdminUserCreate): Observable<AdminUser> {
     return this.http.post<AdminUser>(`${this.base}/users`, body);

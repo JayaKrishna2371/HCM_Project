@@ -22,6 +22,12 @@
         <div class="toolbar">
           <input class="search-input" type="search" placeholder="Search name, username, email or role…"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
+          @if (auth.isSuperAdmin()) {
+            <select class="search-input" [ngModel]="tenantFilter()" (ngModelChange)="onTenantFilter($event)" title="Filter by tenant">
+              <option value="">All tenants</option>
+              @for (t of tenants(); track t.id) { <option [value]="t.id">{{ t.tenant_name }}</option> }
+            </select>
+          }
           <span class="spacer"></span>
           <span class="muted" style="font-size:12px">{{ filtered().length }} of {{ users().length }}</span>
         </div>
@@ -31,7 +37,11 @@
           <div class="tbl-wrap">
             <table class="tbl">
               <thead>
-                <tr><th>Display Name</th><th>Username</th><th>Email</th><th>Role</th><th style="text-align:right">Action</th></tr>
+                <tr>
+                  <th>Display Name</th><th>Username</th><th>Email</th>
+                  @if (auth.isSuperAdmin()) { <th>Tenant</th> }
+                  <th>Role</th><th style="text-align:right">Action</th>
+                </tr>
               </thead>
               <tbody>
                 @for (u of filtered(); track u.id) {
@@ -39,6 +49,7 @@
                     <td><strong>{{ u.name || '—' }}</strong></td>
                     <td>{{ u.username || '—' }}</td>
                     <td>{{ u.email || '—' }}</td>
+                    @if (auth.isSuperAdmin()) { <td><span class="chip chip--muted">{{ tenantName(u.tenant_id) }}</span></td> }
                     <td>@for (r of u.roles; track r) { <span class="chip">{{ r }}</span> }</td>
                     <td style="text-align:right;white-space:nowrap">
                       @if (canUpdate()) {
@@ -54,7 +65,7 @@
                     </td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="5" class="tbl__empty">{{ query() ? 'No users match your search.' : 'No users yet.' }}</td></tr>
+                  <tr><td [attr.colspan]="auth.isSuperAdmin() ? 6 : 5" class="tbl__empty">{{ query() ? 'No users match your search.' : 'No users yet.' }}</td></tr>
                 }
               </tbody>
             </table>

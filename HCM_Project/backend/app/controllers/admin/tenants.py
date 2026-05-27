@@ -21,12 +21,16 @@ def list_tenants(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permissions("tenant:read")),
 ) -> List[TenantRead]:
-    # Super admin (platform-wide) sees all; a tenant user sees only their own.
-    if ctx.is_super_admin and ctx.tenant_id is None:
+    # Tenant Management is a platform-level view: a SUPER_ADMIN always sees every
+    # tenant, regardless of any tenant context they've switched into (X-Tenant-Id).
+    # A tenant user only ever sees their own (home) tenant.
+    if ctx.is_super_admin:
         tenants = tenant_service.list_tenants(db)
-    else:
-        tenant = tenant_service.get_tenant(db, ctx.require_tenant())
+    elif ctx.home_tenant_id is not None:
+        tenant = tenant_service.get_tenant(db, ctx.home_tenant_id)
         tenants = [tenant] if tenant else []
+    else:
+        tenants = []
 
     counts = tenant_service.user_counts_by_tenant(db)
     out: List[TenantRead] = []

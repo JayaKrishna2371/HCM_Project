@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth import rbac
@@ -44,12 +44,24 @@ def _scoped_user_or_404(db: Session, user_id: int, ctx: TenantContext) -> User:
     return user
 
 
-@router.get("", response_model=List[AdminUserRead], summary="List users in the tenant")
+@router.get("", response_model=List[AdminUserRead], summary="List users")
 def list_users(
+    tenant_id: Optional[uuid.UUID] = Query(
+        None, description="SUPER_ADMIN only: filter to one tenant; omit to see users across ALL tenants."
+    ),
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permissions("user:read")),
 ) -> List[AdminUserRead]:
-    users = user_service.list_users(db, ctx.tenant_id, ctx.is_super_admin)
+    # SUPER_ADMIN: drive scope from the explicit query param (not the global tenant
+    # switch) so the User Management page can default to "all tenants" and still
+    # filter to one. A tenant user is always confined to their own tenant.
+    if ctx.is_super_admin:
+        if tenant_id is None:
+            users = user_service.list_users(db, None, is_super_admin=True)   # all tenants
+        else:
+            users = user_service.list_users(db, tenant_id, is_super_admin=False)  # one tenant
+    else:
+        users = user_service.list_users(db, ctx.home_tenant_id, is_super_admin=False)
     return [AdminUserRead.model_validate(u) for u in users]
 
 
