@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/guards/auth.guard';
-import { roleGuard } from './core/guards/role.guard';
-import { adminGuard } from './core/guards/permission.guard';
+import { authGuard } from '@guards/auth.guard';
+import { roleGuard } from '@guards/role.guard';
+import { adminGuard } from '@guards/permission.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
@@ -10,7 +10,7 @@ export const routes: Routes = [
   {
     path: 'login',
     loadComponent: () =>
-      import('./features/login/login.component').then((m) => m.LoginComponent),
+      import('@pages/login/login.component').then((m) => m.LoginComponent),
     title: 'Sign in — Hybrid Cloud Portal',
   },
 
@@ -18,7 +18,7 @@ export const routes: Routes = [
     path: 'dashboard',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+      import('@pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
     title: 'Dashboard — Hybrid Cloud Portal',
   },
 
@@ -26,7 +26,7 @@ export const routes: Routes = [
     path: 'admin',
     canActivate: [authGuard, roleGuard(['Admin'])],
     loadComponent: () =>
-      import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+      import('@pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
     title: 'Admin — Hybrid Cloud Portal',
   },
 
@@ -36,13 +36,13 @@ export const routes: Routes = [
     path: 'administration',
     canActivate: [authGuard, adminGuard],
     loadChildren: () =>
-      import('./features/administration/administration.routes').then((m) => m.ADMINISTRATION_ROUTES),
+      import('@pages/administration/administration.routes').then((m) => m.ADMINISTRATION_ROUTES),
   },
 
   {
     path: 'unauthorized',
     loadComponent: () =>
-      import('./features/unauthorized/unauthorized.component').then((m) => m.UnauthorizedComponent),
+      import('@pages/unauthorized/unauthorized.component').then((m) => m.UnauthorizedComponent),
     title: 'Access denied',
   },
 

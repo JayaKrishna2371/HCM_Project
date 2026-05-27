@@ -1,0 +1,188 @@
+    <header class="vm-head">
+      <div>
+        <h1>VMware vCenter Discovery</h1>
+        <p class="muted">Connect to a vCenter Server to discover its inventory.</p>
+      </div>
+      @if (result()) {
+        <div class="vm-head__actions">
+          <button class="btn btn--ghost" type="button" (click)="rediscover()" [disabled]="loading()">Re-discover</button>
+          <button class="btn btn--ghost" type="button" (click)="reset()">New connection</button>
+        </div>
+      }
+    </header>
+
+    <!-- ============ Connection form ============ -->
+    @if (!result()) {
+      <section class="card connect">
+        <h3 class="card__title">Connect to vCenter</h3>
+        <form (ngSubmit)="connect()" #f="ngForm" class="connect__form">
+          <label class="field-row"><span>vCenter host / IP</span>
+            <input name="host" [(ngModel)]="host" required placeholder="vcenter.corp.local" autocomplete="off" /></label>
+          <label class="field-row"><span>Username</span>
+            <input name="username" [(ngModel)]="username" required placeholder="administrator@vsphere.local" autocomplete="off" /></label>
+          <label class="field-row"><span>Password</span>
+            <input name="password" type="password" [(ngModel)]="password" required autocomplete="off" /></label>
+          <label class="check-row">
+            <input name="ignoreSsl" type="checkbox" [(ngModel)]="ignoreSsl" />
+            <span>Ignore TLS certificate validation (self-signed vCenter)</span>
+          </label>
+          @if (error()) { <p class="error">{{ error() }}</p> }
+          <button class="btn btn--primary" type="submit" [disabled]="loading() || f.invalid">
+            @if (loading()) { <app-spinner [size]="16" /> }
+            <span>{{ loading() ? 'Discovering…' : 'Connect & Discover' }}</span>
+          </button>
+        </form>
+      </section>
+    }
+
+    <!-- ============ Discovery result ============ -->
+    @if (result(); as r) {
+      <section class="vcenter-bar">
+        <div class="vcenter-bar__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7">
+            <rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/>
+            <circle cx="7" cy="7" r="0.6" fill="currentColor"/><circle cx="7" cy="17" r="0.6" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="vcenter-bar__body">
+          <strong>{{ r.vcenter.name ?? r.vcenter.host }}</strong>
+          <span class="muted">
+            {{ r.vcenter.host }}
+            @if (r.vcenter.version) { · v{{ r.vcenter.version }} }
+            @if (r.vcenter.build) { · build {{ r.vcenter.build }} }
+            · discovered {{ r.discovered_at | date: 'medium' }}
+          </span>
+        </div>
+      </section>
+
+      <!-- KPI tiles (click to drill in) -->
+      <section class="tiles">
+        @for (t of tiles(); track t.key) {
+          <article class="tile" [attr.data-tone]="t.tone" (click)="openModal(t.key)" role="button" tabindex="0"
+                   [attr.aria-label]="'View ' + t.label">
+            <div class="tile__top">
+              <span class="tile__icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
+                  @switch (t.key) {
+                    @case ('datacenters') { <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/> }
+                    @case ('clusters') { <path d="M12 3 4 7v10l8 4 8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/> }
+                    @case ('hosts') { <rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/> }
+                    @case ('vms') { <rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/> }
+                    @case ('datastores') { <ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/> }
+                  }
+                </svg>
+              </span>
+              <span class="tile__label">{{ t.label }}</span>
+            </div>
+            <div class="tile__value">{{ t.value }}</div>
+            @if (t.sub) { <div class="tile__sub">{{ t.sub }}</div> }
+            <span class="tile__more">View details ›</span>
+          </article>
+        }
+      </section>
+
+      <!-- Charts -->
+      <section class="charts">
+        <!-- VM Power State donut -->
+        <article class="card chart">
+          <h3 class="card__title">VM Power State</h3>
+          @if (vmStats().total) {
+            <div class="donut-wrap">
+              <svg class="donut" viewBox="0 0 160 160" aria-hidden="true">
+                <circle cx="80" cy="80" r="60" fill="transparent" stroke="#eef0f5" stroke-width="20"/>
+                @for (s of powerDonut(); track s.label) {
+                  <circle cx="80" cy="80" r="60" fill="transparent" [attr.stroke]="s.color" stroke-width="20"
+                          [attr.stroke-dasharray]="s.dasharray" [attr.stroke-dashoffset]="s.dashoffset"
+                          transform="rotate(-90 80 80)" stroke-linecap="butt"/>
+                }
+                <text x="80" y="74" text-anchor="middle" class="donut__num">{{ vmStats().total }}</text>
+                <text x="80" y="92" text-anchor="middle" class="donut__cap">Total VMs</text>
+              </svg>
+              <ul class="legend">
+                @for (s of powerDonut(); track s.label) {
+                  <li><span class="legend__dot" [style.background]="s.color"></span>
+                    {{ s.label }} <strong>{{ s.value }}</strong> <span class="muted">({{ s.pct }}%)</span></li>
+                }
+              </ul>
+            </div>
+          } @else { <p class="muted">No VMs discovered.</p> }
+        </article>
+
+        <!-- VMs by cluster -->
+        <article class="card chart">
+          <h3 class="card__title">VMs by Cluster</h3>
+          @if (clusterBars().length) {
+            <ul class="bars">
+              @for (b of clusterBars(); track b.name) {
+                <li class="bar">
+                  <span class="bar__label" [title]="b.name">{{ b.name }}</span>
+                  <span class="bar__track"><span class="bar__fill" [style.width.%]="b.pct"></span></span>
+                  <span class="bar__val">{{ b.count }}</span>
+                </li>
+              }
+            </ul>
+          } @else { <p class="muted">No VMs discovered.</p> }
+        </article>
+
+        <!-- Storage usage -->
+        <article class="card chart">
+          <h3 class="card__title">Datastore Capacity</h3>
+          @if (storage().cap) {
+            <div class="storage__num">{{ fmtBytes(storage().used) }} <span class="muted">used of {{ fmtBytes(storage().cap) }}</span></div>
+            <div class="storage__track"><span class="storage__fill" [style.width.%]="storage().usedPct"></span></div>
+            <div class="storage__legend">
+              <span><span class="legend__dot" style="background:#2563eb"></span> Used {{ storage().usedPct }}%</span>
+              <span><span class="legend__dot" style="background:#e2e8f0"></span> Free {{ fmtBytes(storage().free) }}</span>
+            </div>
+            <button class="btn btn--ghost btn--sm" type="button" (click)="openModal('datastores')">Per-datastore breakdown ›</button>
+          } @else { <p class="muted">No datastores discovered.</p> }
+        </article>
+      </section>
+    }
+
+    <!-- ============ Detail modal ============ -->
+    @if (open(); as key) {
+      <div class="modal-backdrop" (click)="closeModal()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal__head">
+            <div>
+              <h3>{{ titles[key] }}</h3>
+              <span class="muted">{{ modalRows().length }} of {{ (result()![key]).length }} {{ key }}</span>
+            </div>
+            <div class="modal__head-actions">
+              <button class="btn btn--download btn--sm" type="button" (click)="download(key)" [disabled]="!result()![key].length">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg> Download CSV
+              </button>
+              <button class="modal__x" (click)="closeModal()" aria-label="Close">×</button>
+            </div>
+          </div>
+          <div class="modal__toolbar">
+            <input class="search" type="search" placeholder="Filter…" [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
+          </div>
+          <div class="modal__body">
+            <table class="dtl">
+              <thead>
+                <tr>@for (c of cols[key]; track c.k) { <th>{{ c.h }}</th> }</tr>
+              </thead>
+              <tbody>
+                @for (row of modalRows(); track $index) {
+                  <tr>
+                    @for (c of cols[key]; track c.k) {
+                      <td>
+                        @if (c.fmt === 'power') {
+                          <span class="pwr" [attr.data-p]="row[c.k]">{{ cell(row, c) }}</span>
+                        } @else { {{ cell(row, c) }} }
+                      </td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr><td [attr.colspan]="cols[key].length" class="dtl__empty">No matching {{ key }}.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }

@@ -2,7 +2,7 @@
 
 Run on every startup (after ``create_all``). It:
   1. Ensures the new ``users`` columns exist (for DBs created before this feature).
-  2. Seeds the permission catalog from ``app.core.rbac.PERMISSIONS``.
+  2. Seeds the permission catalog from ``app.auth.rbac.PERMISSIONS``.
   3. Seeds the built-in system roles + their permission grants.
   4. Ensures the DEFAULT tenant exists.
   5. Backfills existing users into the DEFAULT tenant.
@@ -17,7 +17,7 @@ import logging
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.core import rbac
+from app.auth import rbac
 from app.core.config import settings
 from app.models.rbac import Permission, Role
 from app.models.user import User

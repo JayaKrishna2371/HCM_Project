@@ -1,36 +1,36 @@
-"""Tenant (Business Unit) persistence logic."""
+"""Tenant (Business Unit) business logic. Persistence in
+``app.repositories.tenant_repository``."""
 from __future__ import annotations
 
 import uuid
 from typing import Dict, List, Optional
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.tenant import LoginType, Tenant, TenantStatus
-from app.models.user import User
+from app.repositories import tenant_repository as repo
 
 
 def get_tenant(db: Session, tenant_id: uuid.UUID) -> Optional[Tenant]:
-    return db.get(Tenant, tenant_id)
+    return repo.get(db, tenant_id)
 
 
 def get_tenant_by_code(db: Session, code: str) -> Optional[Tenant]:
-    return db.scalar(select(Tenant).where(Tenant.tenant_code == code))
+    return repo.get_by_code(db, code)
+
+
+def get_master_tenant(db: Session) -> Optional[Tenant]:
+    return repo.get_master(db)
 
 
 def list_tenants(db: Session) -> List[Tenant]:
-    # Master tenant first, then alphabetical.
-    return list(db.scalars(select(Tenant).order_by(Tenant.is_master.desc(), Tenant.tenant_name)).all())
+    return repo.list_all(db)
 
 
 def user_counts_by_tenant(db: Session) -> Dict[uuid.UUID, int]:
     """tenant_id -> number of users, for the Tenants table '#Users' column."""
-    rows = db.execute(
-        select(User.tenant_id, func.count(User.id)).group_by(User.tenant_id)
-    ).all()
-    return {tid: count for tid, count in rows if tid is not None}
+    return repo.user_counts(db)
 
 
 def create_tenant(
@@ -45,7 +45,7 @@ def create_tenant(
     dc_name: Optional[str],
     created_by: Optional[str],
 ) -> Tenant:
-    if get_tenant_by_code(db, tenant_code):
+    if repo.get_by_code(db, tenant_code):
         raise ValueError(f"Tenant code '{tenant_code}' already exists")
     tenant = Tenant(
         tenant_code=tenant_code,
@@ -59,21 +59,11 @@ def create_tenant(
         is_master=False,
         created_by=created_by,
     )
-    db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
-    return tenant
-
-
-def delete_tenant(db: Session, tenant: Tenant) -> None:
-    if tenant.is_master:
-        raise ValueError("The master tenant cannot be deleted")
-    db.delete(tenant)
-    db.commit()
+    return repo.add(db, tenant)
 
 
 def update_tenant(db: Session, tenant: Tenant, **changes) -> Tenant:
-    for field in ("tenant_name", "login_type", "ldap_server_url", "domain_name", "dc_name", "status"):
+    for field in ("tenant_name", "login_type", "base_role", "ldap_server_url", "domain_name", "dc_name", "status"):
         if field in changes and changes[field] is not None:
             setattr(tenant, field, changes[field])
     # Clear own-LDAP fields if switched back to platform LDAP.
@@ -81,19 +71,19 @@ def update_tenant(db: Session, tenant: Tenant, **changes) -> Tenant:
         tenant.ldap_server_url = None
         tenant.domain_name = None
         tenant.dc_name = None
-    db.commit()
-    db.refresh(tenant)
-    return tenant
+    return repo.save(db, tenant)
 
 
-def get_master_tenant(db: Session) -> Optional[Tenant]:
-    return db.scalar(select(Tenant).where(Tenant.is_master.is_(True)))
+def delete_tenant(db: Session, tenant: Tenant) -> None:
+    if tenant.is_master:
+        raise ValueError("The master tenant cannot be deleted")
+    repo.delete(db, tenant)
 
 
 def get_or_create_default_tenant(db: Session) -> Tenant:
     """The master organization (HCAP). Platform/super admins belong to it and
     pre-existing/auto-provisioned users are mapped to it."""
-    tenant = get_master_tenant(db) or get_tenant_by_code(db, settings.DEFAULT_TENANT_CODE)
+    tenant = repo.get_master(db) or repo.get_by_code(db, settings.DEFAULT_TENANT_CODE)
     if tenant is None:
         tenant = Tenant(
             tenant_code=settings.DEFAULT_TENANT_CODE,
@@ -104,12 +94,8 @@ def get_or_create_default_tenant(db: Session) -> Tenant:
             is_master=True,
             created_by="system",
         )
-        db.add(tenant)
-        db.commit()
-        db.refresh(tenant)
-    elif not tenant.is_master:
-        # Adopt a pre-existing default tenant as the master.
+        return repo.add(db, tenant)
+    if not tenant.is_master:
         tenant.is_master = True
-        db.commit()
-        db.refresh(tenant)
+        return repo.save(db, tenant)
     return tenant

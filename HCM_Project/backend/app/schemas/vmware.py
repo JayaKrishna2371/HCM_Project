@@ -62,7 +62,10 @@ class VmInfo(BaseModel):
     num_cpu: int = 0
     memory_mb: int = 0
     ip_address: Optional[str] = None
+    cluster: Optional[str] = None
     host: Optional[str] = None
+    num_disks: int = 0
+    disk_provisioned_bytes: int = 0
     uuid: Optional[str] = None
 
 

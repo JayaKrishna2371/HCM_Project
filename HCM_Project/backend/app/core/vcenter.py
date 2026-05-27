@@ -162,7 +162,10 @@ def _vm_info(v: Any) -> VmInfo:
     cfg = getattr(summary, "config", None)
     runtime = getattr(summary, "runtime", None)
     guest = getattr(summary, "guest", None)
+    storage = getattr(summary, "storage", None)
     host_obj = getattr(runtime, "host", None)
+    # Provisioned storage ≈ committed (used) + uncommitted (thin not-yet-allocated).
+    disk_bytes = (getattr(storage, "committed", 0) or 0) + (getattr(storage, "uncommitted", 0) or 0)
     return VmInfo(
         name=getattr(cfg, "name", None) or v.name,
         power_state=str(getattr(runtime, "powerState", "") or ""),
@@ -170,7 +173,10 @@ def _vm_info(v: Any) -> VmInfo:
         num_cpu=getattr(cfg, "numCpu", 0) or 0,
         memory_mb=getattr(cfg, "memorySizeMB", 0) or 0,
         ip_address=getattr(guest, "ipAddress", None),
+        cluster=_parent_cluster_name(host_obj) if host_obj else None,
         host=getattr(host_obj, "name", None) if host_obj else None,
+        num_disks=getattr(cfg, "numVirtualDisks", 0) or 0,
+        disk_provisioned_bytes=disk_bytes,
         uuid=getattr(cfg, "uuid", None),
     )
 

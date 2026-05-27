@@ -1,4 +1,5 @@
-"""User persistence logic — now tenant-aware with DB-managed RBAC.
+"""User business logic — provisioning, validation. Persistence lives in
+``app.repositories.user_repository``.
 
 Login resolution order (see ``resolve_login_user``):
   1. Match by ``directory_id`` (the stable AD objectGUID) — returning user.
@@ -6,10 +7,6 @@ Login resolution order (see ``resolve_login_user``):
      users by username; the real directory_id is bound on first login).
   3. Unknown user — auto-provision into the default tenant (dev) or reject
      (``AUTH_REQUIRE_DB_PROVISIONING=true``, production posture).
-
-For known/claimed users the DB is the source of truth for tenant_id, roles and
-status; LDAP only refreshes display attributes. LDAP-derived roles are NOT
-trusted for authorization (authentication only).
 """
 from __future__ import annotations
 
@@ -17,30 +14,27 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core import rbac
 from app.core.config import settings
 from app.models.user import User
+from app.repositories import user_repository as repo
 from app.services import tenant_service
 
 
 # --------------------------------------------------------------------------- #
-#  Lookups
+#  Lookups (thin pass-throughs to the repository)
 # --------------------------------------------------------------------------- #
 def get_user_by_directory_id(db: Session, directory_id: str) -> Optional[User]:
-    return db.scalar(select(User).where(User.directory_id == directory_id))
+    return repo.get_by_directory_id(db, directory_id)
 
 
 def get_user(db: Session, user_id: int) -> Optional[User]:
-    return db.get(User, user_id)
+    return repo.get_by_id(db, user_id)
 
 
 def get_user_by_username(db: Session, username: str) -> Optional[User]:
-    if not username:
-        return None
-    return db.scalar(select(User).where(func.lower(User.username) == username.lower()))
+    return repo.get_by_username(db, username)
 
 
 # --------------------------------------------------------------------------- #
@@ -62,32 +56,27 @@ def resolve_login_user(db: Session, profile: Dict[str, Any]) -> Optional[User]:
     Returns ``None`` when the user is unknown and DB provisioning is required.
     """
     directory_id = profile["directory_id"]
-    now = datetime.now(timezone.utc)
 
     # 1. Returning user (already bound to a directory_id).
-    user = get_user_by_directory_id(db, directory_id)
+    user = repo.get_by_directory_id(db, directory_id)
     if user is not None:
         _refresh_attrs(user, profile)
-        db.commit()
-        db.refresh(user)
-        return user
+        return repo.save(db, user)
 
     # 2. Pre-created (by an admin) — claim it by username/UPN and bind directory_id.
-    candidate = get_user_by_username(db, profile.get("username") or "") or get_user_by_username(
-        db, (profile.get("upn") or "")
+    candidate = repo.get_by_username(db, profile.get("username") or "") or repo.get_by_username(
+        db, profile.get("upn") or ""
     )
     if candidate is not None:
         candidate.directory_id = directory_id
         _refresh_attrs(candidate, profile)
-        db.commit()
-        db.refresh(candidate)
-        return candidate
+        return repo.save(db, candidate)
 
     # 3. Unknown user.
     if settings.AUTH_REQUIRE_DB_PROVISIONING:
         return None
 
-    # Dev posture: auto-provision into the default tenant (preserves prior behaviour).
+    # Dev posture: auto-provision into the master tenant (preserves prior behaviour).
     tenant = tenant_service.get_or_create_default_tenant(db)
     user = User(
         tenant_id=tenant.id,
@@ -100,22 +89,16 @@ def resolve_login_user(db: Session, profile: Dict[str, Any]) -> Optional[User]:
         family_name=profile.get("family_name"),
         roles=[settings.DEFAULT_USER_ROLE],
         status="ACTIVE",
-        last_login_at=now,
+        last_login_at=datetime.now(timezone.utc),
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    return repo.add(db, user)
 
 
 # --------------------------------------------------------------------------- #
 #  Admin-managed CRUD (tenant-scoped)
 # --------------------------------------------------------------------------- #
 def list_users(db: Session, tenant_id: Optional[uuid.UUID], is_super_admin: bool) -> List[User]:
-    stmt = select(User)
-    if not (is_super_admin and tenant_id is None):
-        stmt = stmt.where(User.tenant_id == tenant_id)
-    return list(db.scalars(stmt.order_by(User.username)).all())
+    return repo.list_by_scope(db, tenant_id, is_super_admin)
 
 
 def create_user(
@@ -129,7 +112,7 @@ def create_user(
     roles: List[str],
     status: str = "ACTIVE",
 ) -> User:
-    if get_user_by_username(db, username):
+    if repo.get_by_username(db, username):
         raise ValueError(f"User '{username}' already exists")
     # Until first LDAP login, the directory_id placeholder is the username; it is
     # rebound to the real objectGUID when the user first authenticates.
@@ -142,10 +125,7 @@ def create_user(
         roles=roles or [settings.DEFAULT_USER_ROLE],
         status=status,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    return repo.add(db, user)
 
 
 def update_user(
@@ -165,14 +145,11 @@ def update_user(
         user.roles = roles
     if status is not None:
         user.status = status
-    db.commit()
-    db.refresh(user)
-    return user
+    return repo.save(db, user)
 
 
 def delete_user(db: Session, user: User) -> None:
-    db.delete(user)
-    db.commit()
+    repo.delete(db, user)
 
 
 def is_active(user: User) -> bool:

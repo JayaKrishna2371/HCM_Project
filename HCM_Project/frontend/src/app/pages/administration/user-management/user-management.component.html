@@ -1,0 +1,126 @@
+    <div class="admin-shell">
+      <div class="page-head">
+        <div>
+          <h1>User Management</h1>
+          <p>Users are bound to a tenant automatically. Sign-in is verified by the tenant's identity source.</p>
+        </div>
+        @if (canCreate()) {
+          <button class="btn btn--primary" (click)="openCreate()">+ Create User</button>
+        }
+      </div>
+
+      <!-- Identity source / LDAP login method -->
+      <div class="card idsrc">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2563eb" stroke-width="1.7"><path d="M12 2 4 6v6c0 5 3.4 7.4 8 10 4.6-2.6 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div>
+          <b>Identity Source — Login Method</b>
+          <div class="idsrc__detail">{{ identitySource() }}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <input class="search-input" type="search" placeholder="Search name, username, email or role…"
+                 [ngModel]="query()" (ngModelChange)="query.set($event)" />
+          <span class="spacer"></span>
+          <span class="muted" style="font-size:12px">{{ filtered().length }} of {{ users().length }}</span>
+        </div>
+        @if (loading()) {
+          <div class="state"><p>Loading users…</p></div>
+        } @else {
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>Display Name</th><th>Username</th><th>Email</th><th>Role</th><th style="text-align:right">Action</th></tr>
+              </thead>
+              <tbody>
+                @for (u of filtered(); track u.id) {
+                  <tr>
+                    <td><strong>{{ u.name || '—' }}</strong></td>
+                    <td>{{ u.username || '—' }}</td>
+                    <td>{{ u.email || '—' }}</td>
+                    <td>@for (r of u.roles; track r) { <span class="chip">{{ r }}</span> }</td>
+                    <td style="text-align:right;white-space:nowrap">
+                      @if (canUpdate()) {
+                        <button class="icon-btn" title="Edit" (click)="openEdit(u)" aria-label="Edit user">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                        </button>
+                      }
+                      @if (canDelete()) {
+                        <button class="icon-btn icon-btn--danger" title="Delete" (click)="confirmDelete(u)" aria-label="Delete user">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="tbl__empty">{{ query() ? 'No users match your search.' : 'No users yet.' }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (modal()) {
+      <div class="admin-shell"><div class="modal-backdrop" (click)="close()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal__head">
+            <h3>{{ modal() === 'create' ? 'Create User' : 'Edit User' }}</h3>
+            <button class="modal__x" (click)="close()">×</button>
+          </div>
+          <div class="modal__body">
+            @if (modal() === 'create') {
+              <div class="field"><label>Display Name</label><input [(ngModel)]="form.name" placeholder="Jane Doe" /></div>
+              <div class="form-grid">
+                <div class="field"><label>Username *</label><input [(ngModel)]="form.username" placeholder="jdoe" /></div>
+                <div class="field"><label>Email</label><input [(ngModel)]="form.email" placeholder="jdoe@example.com" /></div>
+              </div>
+              @if (auth.isSuperAdmin() && !creatingSuperAdmin()) {
+                <div class="field">
+                  <label>Tenant *</label>
+                  <select [(ngModel)]="form.tenant_id">
+                    <option [ngValue]="null" disabled>Select a tenant…</option>
+                    @for (t of tenants(); track t.id) { <option [ngValue]="t.id">{{ t.tenant_name }} ({{ t.tenant_code }})</option> }
+                  </select>
+                  <span class="field__hint">The user will be isolated to this tenant.</span>
+                </div>
+              }
+            } @else {
+              <p style="margin:0 0 12px;color:#64748b;font-size:.85rem">{{ editing()?.username }} — {{ editing()?.email }}</p>
+              <div class="field"><label>Display Name</label><input [(ngModel)]="form.name" /></div>
+              <div class="field"><label>Email</label><input [(ngModel)]="form.email" /></div>
+            }
+
+            <div class="field">
+              <label>Role</label>
+              <div class="role-list">
+                @for (r of assignableRoles(); track r.code) {
+                  <label class="role-opt">
+                    <input type="checkbox" [checked]="form.roles.includes(r.code)" (change)="toggleRole(r.code)" />
+                    <span>{{ r.code }}</span>
+                    <span class="role-opt__name">{{ r.name }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+
+            <div class="field" style="max-width:200px">
+              <label>Status</label>
+              <select [(ngModel)]="form.status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn" (click)="close()">Cancel</button>
+              <button class="btn btn--primary" [disabled]="saving() || !valid()" (click)="save()">
+                {{ saving() ? 'Saving…' : (modal() === 'create' ? 'Create User' : 'Save Changes') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    }

@@ -1,0 +1,68 @@
+    <div class="admin-shell">
+      <div class="page-head">
+        <div>
+          <h1>Role Management</h1>
+          <p>Built-in system roles plus custom roles scoped to your tenant.</p>
+        </div>
+        @if (canCreate()) { <button class="btn btn--primary" (click)="open()">+ Custom Role</button> }
+      </div>
+
+      <div class="card">
+        @if (loading()) { <div class="state"><p>Loading roles…</p></div> }
+        @else {
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Permissions</th><th></th></tr></thead>
+              <tbody>
+                @for (r of roles(); track r.id) {
+                  <tr>
+                    <td><strong>{{ r.code }}</strong></td>
+                    <td>{{ r.name }}</td>
+                    <td><span class="badge" [class.badge--ok]="!r.is_system" [class.badge--off]="r.is_system">{{ r.is_system ? 'System' : 'Custom' }}</span></td>
+                    <td>
+                      @if (r.permissions.includes('*')) { <span class="chip">all permissions</span> }
+                      @else { @for (p of r.permissions.slice(0,6); track p) { <span class="chip chip--muted">{{ p }}</span> } @if (r.permissions.length>6) { <span class="chip chip--muted">+{{ r.permissions.length-6 }}</span> } }
+                    </td>
+                    <td style="text-align:right">
+                      @if (!r.is_system && canDelete()) { <button class="btn btn--sm btn--danger" (click)="remove(r)">Delete</button> }
+                    </td>
+                  </tr>
+                } @empty { <tr><td colspan="5" class="tbl__empty">No roles.</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (showModal()) {
+      <div class="admin-shell"><div class="modal-backdrop" (click)="close()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal__head"><h3>New Custom Role</h3><button class="modal__x" (click)="close()">×</button></div>
+          <div class="modal__body">
+            <div class="form-grid">
+              <div class="field"><label>Code *</label><input [(ngModel)]="form.code" placeholder="AUDITOR" /></div>
+              <div class="field"><label>Name *</label><input [(ngModel)]="form.name" placeholder="Auditor" /></div>
+            </div>
+            <div class="field"><label>Description</label><input [(ngModel)]="form.description" placeholder="What this role is for" /></div>
+            <div class="field">
+              <label>Permissions ({{ form.permissions.length }} selected)</label>
+              <div class="perm-list">
+                @for (p of permissions(); track p.code) {
+                  @if (p.code !== '*') {
+                    <label class="perm-opt">
+                      <input type="checkbox" [checked]="form.permissions.includes(p.code)" (change)="toggle(p.code)" />
+                      <span>{{ p.code }}</span><span class="perm-opt__d">{{ p.description }}</span>
+                    </label>
+                  }
+                }
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn" (click)="close()">Cancel</button>
+              <button class="btn btn--primary" [disabled]="saving() || !valid()" (click)="create()">{{ saving() ? 'Creating…' : 'Create Role' }}</button>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    }

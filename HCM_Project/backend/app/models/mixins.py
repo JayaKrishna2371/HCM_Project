@@ -4,7 +4,7 @@
 used for row-level multi-tenant isolation. Any future tenant-scoped table
 (infrastructure, assets, deployments, …) only needs to inherit this mixin and it
 automatically participates in the same isolation contract — see
-``app.dependencies.tenant`` for the matching query-time enforcement.
+``app.auth.tenant_deps`` for the matching query-time enforcement.
 """
 from __future__ import annotations
 

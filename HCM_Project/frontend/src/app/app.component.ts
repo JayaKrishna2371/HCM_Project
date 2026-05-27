@@ -1,19 +1,16 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
-import { ToastComponent } from './shared/components/toast/toast.component';
-import { AuthService } from './core/services/auth.service';
-import { SessionService } from './core/services/session.service';
+import { ToastComponent } from '@components/toast/toast.component';
+import { AuthService } from '@services/auth.service';
+import { SessionService } from '@services/session.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, ToastComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <router-outlet />
-    <app-toast />
-  `,
+  templateUrl: './app.component.html',
 })
 export class AppComponent implements OnInit {
   private readonly session = inject(SessionService);

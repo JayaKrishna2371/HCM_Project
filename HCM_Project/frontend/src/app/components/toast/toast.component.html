@@ -1,0 +1,21 @@
+    <div class="toast-stack" aria-live="polite" aria-atomic="true">
+      @for (t of toastService.toasts(); track t.id) {
+        <div class="toast" [ngClass]="'toast--' + t.kind">
+          <span class="toast__icon" aria-hidden="true">
+            @switch (t.kind) {
+              @case ('success') { ✓ }
+              @case ('error')   { ! }
+              @case ('warn')    { ⚠ }
+              @default          { i }
+            }
+          </span>
+          <span class="toast__msg">{{ t.message }}</span>
+          <button
+            type="button"
+            class="toast__close"
+            aria-label="Dismiss"
+            (click)="toastService.dismiss(t.id)"
+          >×</button>
+        </div>
+      }
+    </div>

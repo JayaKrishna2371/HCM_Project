@@ -10,9 +10,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.router import api_router
+from app.controllers.router import api_router
 from app.core.config import settings
-from app.core.security import SecureHeadersMiddleware
+from app.middleware.secure_headers import SecureHeadersMiddleware
 from app.db.base import Base
 from app.db.bootstrap import run_bootstrap
 from app.db.session import SessionLocal, engine

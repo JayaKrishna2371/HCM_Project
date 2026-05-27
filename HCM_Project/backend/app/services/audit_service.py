@@ -1,4 +1,5 @@
-"""Audit trail persistence — one helper for the whole platform to call."""
+"""Audit trail business logic. Persistence in
+``app.repositories.audit_repository``."""
 from __future__ import annotations
 
 import logging
@@ -6,10 +7,10 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Request
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
+from app.repositories import audit_repository as repo
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,8 @@ def record(
         ip = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent")
     try:
-        db.add(
+        repo.add(
+            db,
             AuditLog(
                 tenant_id=tenant_id,
                 actor_user_id=actor_user_id,
@@ -46,9 +48,8 @@ def record(
                 ip_address=ip,
                 user_agent=user_agent,
                 detail=detail,
-            )
+            ),
         )
-        db.commit()
     except Exception:  # pragma: no cover - defensive
         logger.exception("Failed to write audit log for action=%s", action)
         db.rollback()
@@ -63,26 +64,6 @@ def list_logs(
     limit: int = 50,
     offset: int = 0,
 ) -> Tuple[List[AuditLog], int]:
-    """Tenant-scoped audit query.
-
-    A SUPER_ADMIN with no tenant selected sees all events; otherwise results are
-    constrained to the effective tenant.
-    """
-    stmt = select(AuditLog)
-    count_stmt = select(func.count()).select_from(AuditLog)
-
-    if not (is_super_admin and tenant_id is None):
-        stmt = stmt.where(AuditLog.tenant_id == tenant_id)
-        count_stmt = count_stmt.where(AuditLog.tenant_id == tenant_id)
-
-    if action:
-        stmt = stmt.where(AuditLog.action == action)
-        count_stmt = count_stmt.where(AuditLog.action == action)
-
-    total = db.scalar(count_stmt) or 0
-    rows = list(
-        db.scalars(
-            stmt.order_by(AuditLog.created_at.desc()).limit(limit).offset(offset)
-        ).all()
-    )
-    return rows, total
+    """Tenant-scoped audit query. A SUPER_ADMIN with no tenant selected sees all."""
+    scoped = not (is_super_admin and tenant_id is None)
+    return repo.query(db, tenant_id=tenant_id, scoped=scoped, action=action, limit=limit, offset=offset)

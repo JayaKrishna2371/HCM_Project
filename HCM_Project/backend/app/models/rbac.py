@@ -3,7 +3,7 @@
 Design
 ------
 * ``Permission`` rows form a fixed catalog of ``resource:action`` strings seeded
-  at startup (see ``app.core.rbac`` + ``app.db.bootstrap``).
+  at startup (see ``app.auth.rbac`` + ``app.db.bootstrap``).
 * ``Role`` is either a *system* role (``tenant_id`` NULL, ``is_system`` True —
   e.g. SUPER_ADMIN, TENANT_ADMIN, USER, READ_ONLY, APPROVER) or a tenant-defined
   *custom* role (``tenant_id`` set). ``code`` is unique within its scope.

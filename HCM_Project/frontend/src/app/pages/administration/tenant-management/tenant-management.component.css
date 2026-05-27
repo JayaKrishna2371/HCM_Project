@@ -1,0 +1,5 @@
+    .icon-btn{background:none;border:1px solid #e2e8f0;border-radius:7px;width:30px;height:30px;
+      cursor:pointer;color:#64748b;display:inline-flex;align-items:center;justify-content:center;margin-left:6px;}
+    .icon-btn:hover{background:#f1f5f9;color:#0f172a;}
+    .icon-btn--danger:hover{background:#fee2e2;color:#b91c1c;border-color:#fecaca;}
+    .icon-btn:disabled{opacity:.35;cursor:not-allowed;}
