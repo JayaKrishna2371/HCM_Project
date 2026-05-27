@@ -61,6 +61,9 @@ TENANT_ADMIN = "TENANT_ADMIN"
 APPROVER = "APPROVER"
 USER = "USER"
 READ_ONLY = "READ_ONLY"
+# Simplified end-user access levels surfaced in the User Management form.
+FULL = "FULL"
+NONE = "NONE"
 
 # Permissions a TENANT_ADMIN gets — scoped to their own tenant at query time.
 _TENANT_ADMIN_PERMS: List[str] = [
@@ -89,6 +92,18 @@ _READ_ONLY_PERMS: List[str] = [
     "access_control:read", "tenant_settings:read", "role:read",
 ]
 
+# FULL = full operational access to the tenant's resources (read + manage),
+# short of tenant administration (no user/role/tenant management).
+_FULL_PERMS: List[str] = [
+    "tenant:read", "user:read", "role:read", "audit:read",
+    "tenant_settings:read", "tenant_settings:update",
+    "infra:read", "infra:manage",
+    "access_control:read", "access_control:manage",
+]
+
+# NONE = the user can authenticate but has no functional access.
+_NONE_PERMS: List[str] = []
+
 
 class SystemRole:
     def __init__(self, code: str, name: str, description: str, permissions: List[str]):
@@ -104,6 +119,8 @@ SYSTEM_ROLES: List[SystemRole] = [
     SystemRole(APPROVER, "Approver", "Approves workflows within the tenant", _APPROVER_PERMS),
     SystemRole(USER, "User", "Standard tenant user", _USER_PERMS),
     SystemRole(READ_ONLY, "Read Only", "Read-only tenant access", _READ_ONLY_PERMS),
+    SystemRole(FULL, "Full", "Full access to tenant resources", _FULL_PERMS),
+    SystemRole(NONE, "None", "No functional access", _NONE_PERMS),
 ]
 
 # Role codes that are platform-level (no tenant). Used to detect super admins.

@@ -33,16 +33,13 @@ export class AdministrationComponent implements OnInit {
   readonly activeTenant = this.tenantCtx.activeTenantId;
 
   private readonly nav: AdminNavItem[] = [
-    { label: 'Tenant Management',       path: 'tenant-management',       icon: 'tenant',   perms: ['tenant:read'] },
-    { label: 'User Management',         path: 'user-management',         icon: 'users',    perms: ['user:read'] },
-    { label: 'Role Management',         path: 'role-management',         icon: 'role',     perms: ['role:read'] },
-    { label: 'Permissions',             path: 'permissions',             icon: 'perm',     perms: ['permission:read'] },
-    { label: 'LDAP Configuration',      path: 'ldap-config',             icon: 'ldap',     perms: ['ldap:read'] },
-    { label: 'Audit Logs',              path: 'audit-logs',              icon: 'audit',    perms: ['audit:read'] },
-    { label: 'Tenant Settings',         path: 'tenant-settings',         icon: 'settings', perms: ['tenant_settings:read'] },
-    { label: 'Platform Settings',       path: 'platform-settings',       icon: 'platform', perms: ['platform_settings:manage'] },
-    { label: 'Infrastructure Isolation', path: 'infrastructure-isolation', icon: 'infra',  perms: ['infra:read'] },
-    { label: 'Access Control',          path: 'access-control',          icon: 'access',   perms: ['access_control:read'] },
+    { label: 'Tenant Management',  path: 'tenant-management',  icon: 'tenant', perms: ['tenant:read'] },
+    { label: 'User Management',    path: 'user-management',    icon: 'users',  perms: ['user:read'] },
+    { label: 'Role Management',    path: 'role-management',    icon: 'role',   perms: ['role:read'] },
+    { label: 'LDAP Configuration', path: 'ldap-config',        icon: 'ldap',   perms: ['ldap:read'] },
+    { label: 'Audit Logs',         path: 'audit-logs',         icon: 'audit',  perms: ['audit:read'] },
+    // Hidden per request: Permissions, Tenant Settings, Platform Settings,
+    // Infrastructure Isolation, Access Control (routes remain but are off-nav).
   ];
 
   readonly visibleNav = computed(() =>

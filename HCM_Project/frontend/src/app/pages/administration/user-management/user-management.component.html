@@ -40,7 +40,7 @@
                 <tr>
                   <th>Display Name</th><th>Username</th><th>Email</th>
                   @if (auth.isSuperAdmin()) { <th>Tenant</th> }
-                  <th>Role</th><th style="text-align:right">Action</th>
+                  <th>Permission</th><th style="text-align:right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -50,7 +50,7 @@
                     <td>{{ u.username || '—' }}</td>
                     <td>{{ u.email || '—' }}</td>
                     @if (auth.isSuperAdmin()) { <td><span class="chip chip--muted">{{ tenantName(u.tenant_id) }}</span></td> }
-                    <td>@for (r of u.roles; track r) { <span class="chip">{{ r }}</span> }</td>
+                    <td><span class="chip">{{ accessLabel(u.roles) }}</span></td>
                     <td style="text-align:right;white-space:nowrap">
                       @if (canUpdate()) {
                         <button class="icon-btn" title="Edit" (click)="openEdit(u)" aria-label="Edit user">
@@ -104,17 +104,12 @@
               <div class="field"><label>Email</label><input [(ngModel)]="form.email" /></div>
             }
 
-            <div class="field">
-              <label>Role</label>
-              <div class="role-list">
-                @for (r of assignableRoles(); track r.code) {
-                  <label class="role-opt">
-                    <input type="checkbox" [checked]="form.roles.includes(r.code)" (change)="toggleRole(r.code)" />
-                    <span>{{ r.code }}</span>
-                    <span class="role-opt__name">{{ r.name }}</span>
-                  </label>
-                }
-              </div>
+            <div class="field" style="max-width:240px">
+              <label>Permission</label>
+              <select [(ngModel)]="form.role">
+                @for (o of accessOptions(); track o.code) { <option [value]="o.code">{{ o.label }}</option> }
+              </select>
+              <span class="field__hint">Access level for this user.</span>
             </div>
 
             <div class="field" style="max-width:200px">

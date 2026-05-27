@@ -6,8 +6,9 @@ import { AdminService } from '@services/admin.service';
 import { AuthService } from '@services/auth.service';
 import { ToastService } from '@services/toast.service';
 import { AdminUser } from '@models/admin-user.model';
-import { Role } from '@models/role.model';
 import { Tenant } from '@models/tenant.model';
+
+interface AccessOption { code: string; label: string; }
 
 @Component({
   selector: 'app-user-management',
@@ -23,7 +24,6 @@ export class UserManagementComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly users = signal<AdminUser[]>([]);
-  readonly roles = signal<Role[]>([]);
   readonly tenants = signal<Tenant[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -36,11 +36,21 @@ export class UserManagementComponent implements OnInit {
   readonly canCreate = computed(() => this.auth.hasPermission('user:create'));
   readonly canUpdate = computed(() => this.auth.hasPermission('user:update'));
   readonly canDelete = computed(() => this.auth.hasPermission('user:delete'));
-  readonly creatingSuperAdmin = computed(() => this.form.roles.includes('SUPER_ADMIN'));
+  readonly creatingSuperAdmin = computed(() => this.form.role === 'SUPER_ADMIN');
 
-  readonly assignableRoles = computed(() =>
-    this.roles().filter((r) => r.code !== 'SUPER_ADMIN' || this.auth.isSuperAdmin()),
-  );
+  /** Simplified access levels. SUPER_ADMIN can additionally appoint admins. */
+  readonly accessOptions = computed<AccessOption[]>(() => {
+    const base: AccessOption[] = [
+      { code: 'NONE', label: 'None' },
+      { code: 'READ_ONLY', label: 'Read Only' },
+      { code: 'FULL', label: 'Full' },
+    ];
+    if (this.auth.isSuperAdmin()) {
+      base.push({ code: 'TENANT_ADMIN', label: 'Tenant Admin' });
+      base.push({ code: 'SUPER_ADMIN', label: 'Super Admin' });
+    }
+    return base;
+  });
 
   /** Client-side search across name / username / email / role. */
   readonly filtered = computed(() => {
@@ -66,17 +76,23 @@ export class UserManagementComponent implements OnInit {
     return 'Platform LDAP / Active Directory (shared directory).';
   });
 
-  form: { username: string; email: string; name: string; roles: string[]; status: string; tenant_id: string | null } = this.blank();
+  form: { username: string; email: string; name: string; role: string; status: string; tenant_id: string | null } = this.blank();
 
   ngOnInit(): void {
     this.load();
-    this.admin.listRoles().subscribe({ next: (r) => this.roles.set(r), error: () => undefined });
-    // Tenants power both the identity-source panel and the super-admin tenant picker.
+    // Tenants power the identity-source panel + the super-admin tenant picker/filter.
     this.admin.listTenants().subscribe({ next: (t) => this.tenants.set(t), error: () => undefined });
   }
 
   private blank() {
-    return { username: '', email: '', name: '', roles: ['USER'], status: 'ACTIVE', tenant_id: null as string | null };
+    return { username: '', email: '', name: '', role: 'READ_ONLY', status: 'ACTIVE', tenant_id: null as string | null };
+  }
+
+  /** Human label for a user's access level (first role code). */
+  accessLabel(roles: string[]): string {
+    const code = (roles && roles[0]) || 'NONE';
+    return this.accessOptions().find((o) => o.code === code)?.label
+      ?? code.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   valid(): boolean {
@@ -106,16 +122,13 @@ export class UserManagementComponent implements OnInit {
     return this.tenants().find((t) => t.id === id)?.tenant_name ?? '—';
   }
 
-  toggleRole(code: string): void {
-    this.form.roles = this.form.roles.includes(code)
-      ? this.form.roles.filter((r) => r !== code)
-      : [...this.form.roles, code];
-  }
-
   openCreate(): void { this.form = this.blank(); this.editing.set(null); this.modal.set('create'); }
   openEdit(u: AdminUser): void {
     this.editing.set(u);
-    this.form = { username: u.username ?? '', email: u.email ?? '', name: u.name ?? '', roles: [...u.roles], status: u.status, tenant_id: u.tenant_id ?? null };
+    this.form = {
+      username: u.username ?? '', email: u.email ?? '', name: u.name ?? '',
+      role: (u.roles && u.roles[0]) || 'NONE', status: u.status, tenant_id: u.tenant_id ?? null,
+    };
     this.modal.set('edit');
   }
   close(): void { this.modal.set(null); }
@@ -131,13 +144,13 @@ export class UserManagementComponent implements OnInit {
         username: this.form.username.trim(),
         email: this.form.email.trim() || null,
         name: this.form.name.trim() || null,
-        roles: this.form.roles,
+        roles: [this.form.role],
         status: this.form.status,
         tenant_id: this.creatingSuperAdmin() ? null : this.form.tenant_id,
       }).subscribe({ next: (u) => done(`User “${u.username}” created`), error: fail });
     } else {
       const u = this.editing()!;
-      this.admin.updateUser(u.id, { email: this.form.email.trim() || null, name: this.form.name.trim() || null, roles: this.form.roles, status: this.form.status })
+      this.admin.updateUser(u.id, { email: this.form.email.trim() || null, name: this.form.name.trim() || null, roles: [this.form.role], status: this.form.status })
         .subscribe({ next: () => done('User updated'), error: fail });
     }
   }
