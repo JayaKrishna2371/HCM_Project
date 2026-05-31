@@ -10,9 +10,6 @@
     .back { width:34px; height:34px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#64748b; border:1px solid #e2e8f0; }
     .back:hover { background:#f1f5f9; color:#0f172a; }
     .brand { font-weight:700; letter-spacing:.06em; font-size:.8125rem; background:linear-gradient(90deg,#2563eb,#0284c7); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-    .tenant-switch { display:flex; align-items:center; gap:8px; margin-left:18px; }
-    .tenant-switch label { font-size:.7rem; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
-    .tenant-switch select { font:inherit; font-size:.8125rem; padding:6px 10px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; }
     .right { margin-left:auto; display:flex; align-items:center; gap:12px; }
     .role-pill { font-size:.6875rem; font-weight:700; letter-spacing:.04em; color:#2563eb; background:#eff5ff; border:1px solid #dbe7ff; padding:4px 10px; border-radius:999px; }
     .user { display:inline-flex; align-items:center; gap:8px; background:none; border:none; cursor:pointer; padding:4px 8px 4px 4px; border-radius:999px; color:#0f172a; }
@@ -29,4 +26,4 @@
     .sidebar__foot .muted { font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; font-weight:600; }
     .sidebar__foot strong { font-size:.8125rem; color:#334155; }
     .main { grid-area:main; padding:24px 32px 40px; overflow-x:hidden; }
-    @media (max-width:820px){ .layout{ grid-template-columns:1fr; grid-template-areas:'topbar' 'main'; } .sidebar{ display:none; } .tenant-switch{ display:none; } }
+    @media (max-width:820px){ .layout{ grid-template-columns:1fr; grid-template-areas:'topbar' 'main'; } .sidebar{ display:none; } }
