@@ -2,13 +2,20 @@
       <div class="page-head">
         <div>
           <h1>Audit Logs</h1>
-          <p>Tenant-scoped activity &amp; security trail. Super Admins see platform-wide events.</p>
+          <p>@if (auth.isSuperAdmin()) { Platform-wide activity. Filter by tenant to drill in. }
+             @else { Activity within your tenant. }</p>
         </div>
       </div>
 
       <div class="card">
         <div class="toolbar">
           <input class="search-input" [(ngModel)]="action" placeholder="Filter by action e.g. user.create" (keyup.enter)="reload()" />
+          @if (auth.isSuperAdmin()) {
+            <select class="search-input" [ngModel]="tenantFilter()" (ngModelChange)="onTenantFilter($event)" title="Filter by tenant">
+              <option value="">All tenants</option>
+              @for (t of tenants(); track t.id) { <option [value]="t.id">{{ t.tenant_name }}</option> }
+            </select>
+          }
           <button class="btn" (click)="reload()">Apply</button>
           <div class="spacer"></div>
           <span style="font-size:.8rem;color:#64748b">{{ total() }} events</span>
@@ -18,18 +25,23 @@
         @else {
           <div class="tbl-wrap">
             <table class="tbl">
-              <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Resource</th><th>Status</th><th>IP</th></tr></thead>
+              <thead><tr>
+                <th>When</th><th>Actor</th>
+                @if (auth.isSuperAdmin()) { <th>Tenant</th> }
+                <th>Action</th><th>Resource</th><th>Status</th><th>IP</th>
+              </tr></thead>
               <tbody>
                 @for (e of items(); track e.id) {
                   <tr>
                     <td style="white-space:nowrap">{{ e.created_at | date:'short' }}</td>
                     <td>{{ e.actor_username || '—' }}</td>
+                    @if (auth.isSuperAdmin()) { <td><span class="chip chip--muted">{{ tenantName(e.tenant_id) }}</span></td> }
                     <td><span class="chip chip--muted">{{ e.action }}</span></td>
                     <td>{{ e.resource_type }}{{ e.resource_id ? ' #' + e.resource_id : '' }}</td>
                     <td><span class="badge" [class.badge--ok]="e.status==='SUCCESS'" [class.badge--warn]="e.status==='FAILURE'" [class.badge--off]="e.status==='DENIED'">{{ e.status }}</span></td>
                     <td>{{ e.ip_address || '—' }}</td>
                   </tr>
-                } @empty { <tr><td colspan="6" class="tbl__empty">No audit events.</td></tr> }
+                } @empty { <tr><td [attr.colspan]="auth.isSuperAdmin() ? 7 : 6" class="tbl__empty">No audit events.</td></tr> }
               </tbody>
             </table>
           </div>

@@ -5,9 +5,10 @@ their own tenant from the permission catalog.
 """
 from __future__ import annotations
 
-from typing import List
+import uuid
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.tenant_context import TenantContext
@@ -27,12 +28,24 @@ def list_permissions(
     return [PermissionRead.model_validate(p) for p in rbac_service.list_permissions(db)]
 
 
-@router.get("/roles", response_model=List[RoleRead], summary="System + tenant custom roles")
+@router.get("/roles", response_model=List[RoleRead], summary="Roles")
 def list_roles(
+    tenant_id: Optional[uuid.UUID] = Query(
+        None, description="SUPER_ADMIN only: filter custom roles to a tenant."
+    ),
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permissions("role:read")),
 ) -> List[RoleRead]:
-    roles = rbac_service.list_roles(db, ctx.tenant_id, include_system=True)
+    if ctx.is_super_admin:
+        # No filter => ALL roles (system + every tenant's custom).
+        # Filter => only that tenant's custom roles.
+        roles = rbac_service.list_roles(db, tenant_id, include_system=False)
+    else:
+        # A TENANT_ADMIN only sees their own tenant's custom roles — never system roles.
+        roles = [
+            r for r in rbac_service.list_roles(db, ctx.home_tenant_id, include_system=False)
+            if not r.is_system
+        ]
     return [RoleRead.from_role(r) for r in roles]
 
 
@@ -48,10 +61,19 @@ def create_role(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permissions("role:create")),
 ) -> RoleRead:
-    try:
-        tenant_id = ctx.require_tenant()
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    # Target tenant: a TENANT_ADMIN is bound to their own; a SUPER_ADMIN must say
+    # which tenant the custom role belongs to (sent in the body).
+    if ctx.is_super_admin:
+        tenant_id = body.tenant_id
+        if tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select a tenant to create the role in (tenant_id).",
+            )
+    elif ctx.home_tenant_id is not None:
+        tenant_id = ctx.home_tenant_id
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No tenant context.")
     try:
         role = rbac_service.create_custom_role(
             db,

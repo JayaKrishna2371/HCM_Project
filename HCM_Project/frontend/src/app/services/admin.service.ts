@@ -49,8 +49,11 @@ export class AdminService {
   }
 
   // ---- Roles & permissions ----
-  listRoles(): Observable<Role[]> {
-    return this.http.get<Role[]>(`${this.base}/roles`);
+  /** SUPER_ADMIN: pass a tenantId to filter custom roles; omit for ALL roles. */
+  listRoles(tenantId?: string | null): Observable<Role[]> {
+    let params = new HttpParams();
+    if (tenantId) params = params.set('tenant_id', tenantId);
+    return this.http.get<Role[]>(`${this.base}/roles`, { params });
   }
   createRole(body: RoleCreate): Observable<Role> {
     return this.http.post<Role>(`${this.base}/roles`, body);
@@ -66,9 +69,11 @@ export class AdminService {
   }
 
   // ---- Audit ----
-  listAudit(opts: { action?: string; limit?: number; offset?: number } = {}): Observable<AuditLogPage> {
+  /** SUPER_ADMIN: pass tenantId to filter; omit for all tenants. */
+  listAudit(opts: { action?: string; tenantId?: string | null; limit?: number; offset?: number } = {}): Observable<AuditLogPage> {
     let params = new HttpParams();
     if (opts.action) params = params.set('action', opts.action);
+    if (opts.tenantId) params = params.set('tenant_id', opts.tenantId);
     if (opts.limit != null) params = params.set('limit', String(opts.limit));
     if (opts.offset != null) params = params.set('offset', String(opts.offset));
     return this.http.get<AuditLogPage>(`${this.base}/audit`, { params });

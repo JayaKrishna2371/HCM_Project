@@ -19,6 +19,8 @@ export interface RoleCreate {
   name: string;
   description?: string | null;
   permissions: string[];
+  /** SUPER_ADMIN only: target tenant. Ignored for tenant admins. */
+  tenant_id?: string | null;
 }
 
 export interface RoleUpdate {

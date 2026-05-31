@@ -1,11 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { AuthService } from '@services/auth.service';
-import { AdminService } from '@services/admin.service';
-import { TenantContextService } from '@services/tenant-context.service';
-import { Tenant } from '@models/tenant.model';
 
 interface AdminNavItem {
   label: string;
@@ -23,14 +20,8 @@ interface AdminNavItem {
   templateUrl: './administration.component.html',
   styleUrls: ['./administration.component.css'],
 })
-export class AdministrationComponent implements OnInit {
+export class AdministrationComponent {
   readonly auth = inject(AuthService);
-  private readonly admin = inject(AdminService);
-  private readonly tenantCtx = inject(TenantContextService);
-  private readonly router = inject(Router);
-
-  readonly tenants = signal<Tenant[]>([]);
-  readonly activeTenant = this.tenantCtx.activeTenantId;
 
   private readonly nav: AdminNavItem[] = [
     { label: 'Tenant Management',  path: 'tenant-management',  icon: 'tenant', perms: ['tenant:read'] },
@@ -51,26 +42,6 @@ export class AdministrationComponent implements OnInit {
     return p?.given_name ?? p?.name ?? p?.username ?? 'Admin';
   });
   readonly initial = computed(() => (this.displayName()[0] ?? 'A').toUpperCase());
-
-  ngOnInit(): void {
-    // Super admins need the tenant list to drive the context switcher.
-    if (this.auth.isSuperAdmin()) {
-      this.admin.listTenants().subscribe({
-        next: (t) => this.tenants.set(t),
-        error: () => undefined,
-      });
-    }
-  }
-
-  onSwitch(ev: Event): void {
-    const value = (ev.target as HTMLSelectElement).value;
-    this.tenantCtx.switchTo(value || null);
-    // Re-trigger the active route's data load by navigating to itself.
-    const url = this.router.url;
-    this.router.navigateByUrl('/administration', { skipLocationChange: true }).then(() =>
-      this.router.navigateByUrl(url),
-    );
-  }
 
   logout(): void { this.auth.logout(); }
 }
