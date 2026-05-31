@@ -20,18 +20,6 @@
         </a>
         <span class="brand">ADMINISTRATION</span>
 
-        @if (auth.isSuperAdmin()) {
-          <div class="tenant-switch">
-            <label>Tenant context</label>
-            <select [value]="activeTenant() ?? ''" (change)="onSwitch($event)">
-              <option value="">Platform-wide (all tenants)</option>
-              @for (t of tenants(); track t.id) {
-                <option [value]="t.id">{{ t.tenant_name }} ({{ t.tenant_code }})</option>
-              }
-            </select>
-          </div>
-        }
-
         <div class="right">
           <span class="role-pill">{{ auth.primaryRole() ?? 'USER' }}</span>
           <button class="user" type="button" (click)="logout()" [title]="auth.profile()?.email ?? 'Sign out'">

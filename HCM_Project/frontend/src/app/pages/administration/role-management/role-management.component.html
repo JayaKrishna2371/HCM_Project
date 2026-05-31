@@ -2,22 +2,39 @@
       <div class="page-head">
         <div>
           <h1>Role Management</h1>
-          <p>Built-in system roles plus custom roles scoped to your tenant.</p>
+          <p>@if (auth.isSuperAdmin()) { Built-in system roles plus every tenant's custom roles. }
+             @else { Your tenant's custom roles. }</p>
         </div>
         @if (canCreate()) { <button class="btn btn--primary" (click)="open()">+ Custom Role</button> }
       </div>
 
       <div class="card">
+        @if (auth.isSuperAdmin()) {
+          <div class="toolbar">
+            <label class="muted" style="font-size:12px">Tenant:</label>
+            <select class="search-input" [ngModel]="tenantFilter()" (ngModelChange)="onTenantFilter($event)">
+              <option value="">All (system + every tenant)</option>
+              @for (t of tenants(); track t.id) { <option [value]="t.id">{{ t.tenant_name }}</option> }
+            </select>
+            <span class="spacer"></span>
+            <span class="muted" style="font-size:12px">{{ roles().length }} role{{ roles().length === 1 ? '' : 's' }}</span>
+          </div>
+        }
         @if (loading()) { <div class="state"><p>Loading roles…</p></div> }
         @else {
           <div class="tbl-wrap">
             <table class="tbl">
-              <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Permissions</th><th></th></tr></thead>
+              <thead><tr>
+                <th>Code</th><th>Name</th>
+                @if (auth.isSuperAdmin()) { <th>Tenant</th> }
+                <th>Type</th><th>Permissions</th><th></th>
+              </tr></thead>
               <tbody>
                 @for (r of roles(); track r.id) {
                   <tr>
                     <td><strong>{{ r.code }}</strong></td>
                     <td>{{ r.name }}</td>
+                    @if (auth.isSuperAdmin()) { <td><span class="chip chip--muted">{{ tenantName(r.tenant_id) }}</span></td> }
                     <td><span class="badge" [class.badge--ok]="!r.is_system" [class.badge--off]="r.is_system">{{ r.is_system ? 'System' : 'Custom' }}</span></td>
                     <td>
                       @if (r.permissions.includes('*')) { <span class="chip">all permissions</span> }
@@ -27,7 +44,7 @@
                       @if (!r.is_system && canDelete()) { <button class="btn btn--sm btn--danger" (click)="remove(r)">Delete</button> }
                     </td>
                   </tr>
-                } @empty { <tr><td colspan="5" class="tbl__empty">No roles.</td></tr> }
+                } @empty { <tr><td [attr.colspan]="auth.isSuperAdmin() ? 6 : 5" class="tbl__empty">No roles.</td></tr> }
               </tbody>
             </table>
           </div>
@@ -40,6 +57,16 @@
         <div class="modal" (click)="$event.stopPropagation()">
           <div class="modal__head"><h3>New Custom Role</h3><button class="modal__x" (click)="close()">×</button></div>
           <div class="modal__body">
+            @if (auth.isSuperAdmin()) {
+              <div class="field">
+                <label>Tenant *</label>
+                <select [(ngModel)]="form.tenant_id">
+                  <option [ngValue]="null" disabled>Select a tenant…</option>
+                  @for (t of tenants(); track t.id) { <option [ngValue]="t.id">{{ t.tenant_name }} ({{ t.tenant_code }})</option> }
+                </select>
+                <span class="field__hint">The custom role will belong to this tenant.</span>
+              </div>
+            }
             <div class="form-grid">
               <div class="field"><label>Code *</label><input [(ngModel)]="form.code" placeholder="AUDITOR" /></div>
               <div class="field"><label>Name *</label><input [(ngModel)]="form.name" placeholder="Auditor" /></div>

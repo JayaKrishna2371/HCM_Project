@@ -69,6 +69,9 @@ class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=128)
     description: Optional[str] = Field(None, max_length=255)
     permissions: List[str] = Field(default_factory=list, description="Permission codes")
+    # SUPER_ADMIN only: which tenant the custom role belongs to. Ignored for a
+    # TENANT_ADMIN (bound to their own tenant).
+    tenant_id: Optional[uuid.UUID] = None
 
 
 class RoleUpdate(BaseModel):
