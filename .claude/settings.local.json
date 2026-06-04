@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git -C \"c:/Users/Admin/Desktop/Project\" diff -- HCM_Project/backend/app/core/config.py HCM_Project/backend/app/core/ldap_auth.py)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://127.0.0.1:8000/api/v1/health\" -UseBasicParsing -TimeoutSec 5; \"IPv4 127.0.0.1 -> $\\($r.StatusCode\\)\" } catch { \"IPv4 127.0.0.1 -> ERROR: $\\($_.Exception.Message\\)\" }; try { $r2 = Invoke-WebRequest -Uri \"http://localhost:8000/api/v1/health\" -UseBasicParsing -TimeoutSec 5; \"localhost -> $\\($r2.StatusCode\\)\" } catch { \"localhost -> ERROR: $\\($_.Exception.Message\\)\" })",
-      "Bash(python -m py_compile app/core/ldap_auth.py app/core/config.py app/core/security.py app/api/v1/endpoints/auth.py)"
-    ]
-  }
-}

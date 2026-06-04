@@ -2,7 +2,7 @@
 ``create_all`` / migrations see them. Order matters: ``tenants`` must be defined
 before models that FK to it.
 """
-from app.models.tenant import Tenant  # noqa: F401
-from app.models.rbac import Permission, Role, role_permissions  # noqa: F401
-from app.models.user import User  # noqa: F401
-from app.models.audit import AuditLog  # noqa: F401
+from app.models.tenants.tenant_model import Tenant  # noqa: F401
+from app.models.roles.rbac_model import Permission, Role, role_permissions  # noqa: F401
+from app.models.users.user_model import User  # noqa: F401
+from app.models.audit.audit_model import AuditLog  # noqa: F401

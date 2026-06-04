@@ -13,9 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.controllers.router import api_router
 from app.core.config import settings
 from app.middleware.secure_headers import SecureHeadersMiddleware
-from app.db.base import Base
-from app.db.bootstrap import run_bootstrap
-from app.db.session import SessionLocal, engine
+from app.db.session.base import Base
+from app.db.seed.bootstrap import run_bootstrap
+from app.db.session.session import SessionLocal, engine
 
 # Import the models package so SQLAlchemy registers every model on Base.metadata
 # (tenants, users, roles, permissions, audit_logs) before create_all.

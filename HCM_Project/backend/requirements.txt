@@ -6,6 +6,7 @@ python-dotenv
 SQLAlchemy
 psycopg[binary]
 python-jose[cryptography]==3.5.0
+bcrypt
 ldap3
 email-validator
 pyvmomi
