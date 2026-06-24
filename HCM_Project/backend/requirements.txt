@@ -1,11 +1,87 @@
-<div class="manage-section">
-<label style="display:block; margin-bottom:4px;">VLAN / Network</label>
-<select [(ngModel)]="selectedNetwork" style="width:100%; margin-bottom:8px;">
-<option *ngFor="let n of vmNetworks" [value]="n.name">
-{{ n.name }}{{ n.name === currentNetwork ? ' (current)' : '' }}
-</option>
-</select>
-<button (click)="applyNetwork()" style="width:100%;">
-Change Network
+def set_vm_nic_connected(self, service_instance, vm_name, connected):
+vm = self.find_vm(service_instance, vm_name)
+if not vm:
+return {"success": False, "message": "VM not found"}
+
+nic = None
+for dev in vm.config.hardware.device:
+if isinstance(dev, vim.vm.device.VirtualEthernetCard):
+nic = dev
+break
+if not nic:
+return {"success": False, "message": "No network adapter found on VM"}
+
+nic_spec = vim.vm.device.VirtualDeviceSpec()
+nic_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+nic_spec.device = nic
+
+nic_spec.device.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+nic_spec.device.connectable.startConnected = connected
+nic_spec.device.connectable.connected = connected
+nic_spec.device.connectable.allowGuestControl = True
+
+config_spec = vim.vm.ConfigSpec()
+config_spec.deviceChange = [nic_spec]
+
+task = vm.ReconfigVM_Task(spec=config_spec)
+self.wait_for_task(task)
+
+state = "connected" if connected else "disconnected"
+return {"success": True, "message": f"NIC {state}"}
+
+
+
+
+@staticmethod
+def set_vm_nic_connected(endpoint_id, vm_name, connected, db):
+service_instance, _ = VmwareService._get_vm_instance(endpoint_id, vm_name, db)
+return VCenterClient().set_vm_nic_connected(service_instance, vm_name, connected)
+
+
+class VmNicConnect(BaseModel):
+connected: bool
+
+
+@staticmethod
+def set_vm_nic_connected(endpoint_id, vm_name, request: VmNicConnect, db):
+return VmwareService.set_vm_nic_connected(endpoint_id, vm_name, request.connected, db)
+
+
+@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/nic-connection")
+def set_vm_nic_connected(endpoint_id: int, vm_name: str, request: VmNicConnect, db: Session = Depends(get_db)):
+return VmwareController.set_vm_nic_connected(endpoint_id, vm_name, request, db)
+
+
+setVmNicConnected(endpointId: number, vmName: string, connected: boolean) {
+return this.http.put(
+`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/nic-connection`,
+{ connected }
+);
+}
+
+
+nicConnected: boolean = true;
+
+this.nicConnected = res.nic_connected ?? true;
+
+
+toggleNicConnection() {
+if (!this.manageVm) return;
+const newState = !this.nicConnected;
+const vmName = this.manageVm.name;
+this.handle(
+this.manageVm,
+this.vmwareService.setVmNicConnected(this.endpointId, vmName, newState),
+newState ? 'NIC connected' : 'NIC disconnected',
+'NIC update failed'
+);
+this.nicConnected = newState;
+}
+
+
+
+<button
+(click)="toggleNicConnection()"
+style="width:100%; margin-top:8px; padding:8px; border:none; border-radius:4px; cursor:pointer; color:#fff; background: {{ nicConnected ? '#c0392b' : '#27ae60' }};">
+{{ nicConnected ? 'Disconnect NIC' : 'Connect NIC' }}
 </button>
-</div>
