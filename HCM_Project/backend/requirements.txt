@@ -8,3 +8,134 @@ psycopg[binary]==3.1.18
 python-jose[cryptography]==3.3.0
 httpx==0.27.0
 email-validator==2.1.1
+
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+SQLAlchemy
+psycopg[binary]
+python-jose[cryptography]==3.5.0
+cryptography
+ldap3
+email-validator
+pyvmomi
+
+
+def get_vm_host_networks(self, service_instance, vm_name):
+vm = self.find_vm(service_instance, vm_name)
+if not vm:
+return {"current_network": None, "networks": []}
+
+# current portgroup on the first NIC
+current = None
+for d in vm.config.hardware.device:
+if isinstance(d, vim.vm.device.VirtualEthernetCard):
+backing = d.backing
+if hasattr(backing, "port") and backing.port:
+# DVS backing -> resolve portgroup key to name
+for net in vm.runtime.host.network:
+if getattr(net, "key", None) == backing.port.portgroupKey:
+current = net.name
+break
+elif hasattr(backing, "deviceName"):
+current = backing.deviceName
+break
+
+networks = []
+seen = set()
+for net in vm.runtime.host.network:
+if net.name not in seen:
+seen.add(net.name)
+is_dvs = isinstance(net, vim.dvs.DistributedVirtualPortgroup)
+networks.append({"name": net.name, "type": "dvs" if is_dvs else "standard"})
+
+return {"current_network": current, "networks": networks}
+
+
+def change_vm_network(self, service_instance, vm_name, network_name):
+vm = self.find_vm(service_instance, vm_name)
+if not vm:
+return {"success": False, "message": "VM not found"}
+
+target = next((n for n in vm.runtime.host.network if n.name == network_name), None)
+if not target:
+return {"success": False, "message": "Network not found on host"}
+
+nic = next((d for d in vm.config.hardware.device
+if isinstance(d, vim.vm.device.VirtualEthernetCard)), None)
+if not nic:
+return {"success": False, "message": "No NIC on VM"}
+
+if isinstance(target, vim.dvs.DistributedVirtualPortgroup):
+pc = vim.dvs.PortConnection()
+pc.portgroupKey = target.key
+pc.switchUuid = target.config.distributedVirtualSwitch.uuid
+nic.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+nic.backing.port = pc
+else:
+nic.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+nic.backing.network = target
+nic.backing.deviceName = network_name
+
+nic.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+nic.connectable.connected = True
+nic.connectable.startConnected = True
+
+spec = vim.vm.device.VirtualDeviceConfigSpec()
+spec.operation = vim.vm.device.VirtualDeviceConfigSpec.Operation.edit
+spec.device = nic
+
+task = vm.ReconfigVM_Task(spec=vim.vm.ConfigSpec(deviceChange=[spec]))
+self.wait_for_task(task)
+return {"success": True, "message": f"Network changed to {network_name}"}
+
+
+@staticmethod
+def get_vm_networks(endpoint_id: int, vm_name: str, db: Session):
+service_instance, _ = VmwareService._get_vm_instance(endpoint_id, vm_name, db)
+return VCenterClient().get_vm_host_networks(service_instance, vm_name)
+
+@staticmethod
+def change_vm_network(
+endpoint_id: int,
+vm_name: str,
+request: VmNetworkChange,
+db: Session,
+):
+service_instance, _ = VmwareService._get_vm_instance(endpoint_id, vm_name, db)
+return VCenterClient().change_vm_network(
+service_instance,
+vm_name,
+request.network_name,
+)
+
+
+@staticmethod
+def get_vm_networks(endpoint_id, vm_name, db):
+return VmwareService.get_vm_networks(endpoint_id, vm_name, db)
+
+@staticmethod
+def change_vm_network(endpoint_id, vm_name, request, db):
+return VmwareService.change_vm_network(endpoint_id, vm_name, request, db)
+
+
+@router.get("/endpoints/{endpoint_id}/vms/{vm_name}/networks")
+def get_vm_networks(
+endpoint_id: int,
+vm_name: str,
+db: Session = Depends(get_db)
+):
+return VmwareController.get_vm_networks(endpoint_id, vm_name, db)
+
+
+@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/network")
+def change_vm_network(
+endpoint_id: int,
+vm_name: str,
+request: VmNetworkChange,
+db: Session = Depends(get_db)
+):
+return VmwareController.change_vm_network(endpoint_id, vm_name, request, db)
+
