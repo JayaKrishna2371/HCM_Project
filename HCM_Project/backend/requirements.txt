@@ -1,93 +1,11 @@
-/ =================================
-// NETWORK MANAGEMENT (NEW)
-// =================================
-
-getVmNetworks(endpointId: number, vmName: string) {
-return this.http.get(
-`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/networks`
-);
-}
-
-changeVmNetwork(endpointId: number, vmName: string, networkName: string) {
-return this.http.put(
-`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/network`,
-{ network_name: networkName }
-);
-}
-
-
-// NETWORK (NEW)
-vmNetworks: any[] = [];
-selectedNetwork: string | null = null;
-currentNetwork: string | null = null;
-
-
-(this.vmwareService.getVmNetworks(this.endpointId, vm.name) as any)
-.subscribe((res: any) => {
-this.vmNetworks = res.networks || [];
-this.currentNetwork = res.current_network;
-this.selectedNetwork = res.current_network;
-this.cdr.detectChanges();
-});
-
-
-applyNetwork() {
-if (!this.manageVm) return;
-if (!this.selectedNetwork) {
-this.showToast('Select a network', 'error');
-return;
-}
-if (this.selectedNetwork === this.currentNetwork) {
-this.showToast('No change', 'error');
-return;
-}
-
-const vmName = this.manageVm.name;
-this.handle(
-this.manageVm,
-this.vmwareService.changeVmNetwork(this.endpointId, vmName, this.selectedNetwork),
-'Network changed',
-'Network change failed'
-);
-}
-
-
 <div class="manage-section">
-<label>VLAN / Network</label>
-<select [(ngModel)]="selectedNetwork">
+<label style="display:block; margin-bottom:4px;">VLAN / Network</label>
+<select [(ngModel)]="selectedNetwork" style="width:100%; margin-bottom:8px;">
 <option *ngFor="let n of vmNetworks" [value]="n.name">
-{{ n.name }}<span *ngIf="n.name === currentNetwork"> (current)</span>
+{{ n.name }}{{ n.name === currentNetwork ? ' (current)' : '' }}
 </option>
 </select>
-<button (click)="applyNetwork()">Change Network</button>
+<button (click)="applyNetwork()" style="width:100%;">
+Change Network
+</button>
 </div>
-
-
-@staticmethod
-def change_vm_network(
-endpoint_id: int,
-vm_name: str,
-request: VmNetworkChange,
-db: Session,
-):
-service_instance, _ = VmwareService._get_vm_instance(endpoint_id, vm_name, db)
-result = VCenterClient().change_vm_network(
-service_instance,
-vm_name,
-request.network_name,
-)
-
-if result.get("success"):
-vm_row = (
-db.query(VirtualMachine)
-.filter(
-VirtualMachine.endpoint_id == endpoint_id,
-VirtualMachine.name == vm_name,
-)
-.first()
-)
-if vm_row and hasattr(vm_row, "network_name"):
-vm_row.network_name = request.network_name
-db.commit()
-
-return result
