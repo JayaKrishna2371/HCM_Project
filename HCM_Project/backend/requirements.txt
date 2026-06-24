@@ -3,7 +3,7 @@ vm = self.find_vm(service_instance, vm_name)
 if not vm:
 return {"nics": [], "networks": []}
 
-# available portgroups on the host (unchanged from your current logic)
+# available portgroups on the host
 networks = []
 seen = set()
 for net in vm.runtime.host.network:
@@ -12,7 +12,7 @@ seen.add(net.name)
 net_type = "dvs" if isinstance(net, vim.dvs.DistributedVirtualPortgroup) else "standard"
 networks.append({"name": net.name, "type": net_type})
 
-# all NICs on the VM, each with its own current network + state
+# all NICs on the VM
 nics = []
 for dev in vm.config.hardware.device:
 if isinstance(dev, vim.vm.device.VirtualEthernetCard):
@@ -31,7 +31,7 @@ current = backing.deviceName
 
 nics.append({
 "key": dev.key,
-"label": dev.deviceInfo.label, # "Network adapter 1"
+"label": dev.deviceInfo.label,
 "current_network": current,
 "connected": dev.connectable.connected if dev.connectable else False,
 })
@@ -48,7 +48,6 @@ target = next((n for n in vm.runtime.host.network if n.name == network_name), No
 if not target:
 return {"success": False, "message": "Network not found on host"}
 
-# select the specific NIC if a key is given, else first NIC (back-compat)
 if nic_key is not None:
 nic = next((d for d in vm.config.hardware.device
 if isinstance(d, vim.vm.device.VirtualEthernetCard) and d.key == nic_key), None)
@@ -58,7 +57,28 @@ if isinstance(d, vim.vm.device.VirtualEthernetCard)), None)
 if not nic:
 return {"success": False, "message": "No NIC on VM"}
 
-# ... rest unchanged (lines 469 onward: DVS vs standard backing, connectable, spec, ReconfigVM_Task) ...
+if isinstance(target, vim.dvs.DistributedVirtualPortgroup):
+pc = vim.dvs.PortConnection()
+pc.portgroupKey = target.key
+pc.switchUuid = target.config.distributedVirtualSwitch.uuid
+nic.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+nic.backing.port = pc
+else:
+nic.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+nic.backing.network = target
+nic.backing.deviceName = network_name
+
+nic.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+nic.connectable.connected = True
+nic.connectable.startConnected = True
+
+spec = vim.vm.device.VirtualDeviceSpec()
+spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+spec.device = nic
+
+task = vm.ReconfigVM_Task(spec=vim.vm.ConfigSpec(deviceChange=[spec]))
+self.wait_for_task(task)
+return {"success": True, "message": f"Network changed to {network_name}"}
 
 
 def set_vm_nic_connected(self, service_instance, vm_name, connected, nic_key=None):
@@ -75,7 +95,20 @@ if isinstance(d, vim.vm.device.VirtualEthernetCard)), None)
 if not nic:
 return {"success": False, "message": "No NIC on VM"}
 
-# ... rest unchanged ...
+nic.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+nic.connectable.connected = connected
+nic.connectable.startConnected = connected
+nic.connectable.allowGuestControl = True
+
+spec = vim.vm.device.VirtualDeviceSpec()
+spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+spec.device = nic
+
+task = vm.ReconfigVM_Task(spec=vim.vm.ConfigSpec(deviceChange=[spec]))
+self.wait_for_task(task)
+
+state = "connected" if connected else "disconnected"
+return {"success": True, "message": f"NIC {state}"}
 
 
 @staticmethod
@@ -92,6 +125,11 @@ return VCenterClient().set_vm_nic_connected(
 service_instance, vm_name, request.connected, request.nic_key
 )
 
+@staticmethod
+def get_vm_networks(endpoint_id, vm_name, db):
+service_instance, _ = VmwareService._get_vm_instance(endpoint_id, vm_name, db)
+return VCenterClient().get_vm_host_networks(service_instance, vm_name)
+
 
 class VmNetworkChange(BaseModel):
 network_name: str
@@ -101,6 +139,37 @@ class VmNicConnect(BaseModel):
 connected: bool
 nic_key: int | None = None
 
+@staticmethod
+def get_vm_networks(endpoint_id, vm_name, db):
+return VmwareService.get_vm_networks(endpoint_id, vm_name, db)
+
+@staticmethod
+def change_vm_network(endpoint_id, vm_name, request: VmNetworkChange, db):
+return VmwareService.change_vm_network(endpoint_id, vm_name, request, db)
+
+@staticmethod
+def set_vm_nic_connected(endpoint_id, vm_name, request: VmNicConnect, db):
+return VmwareService.set_vm_nic_connected(endpoint_id, vm_name, request, db)
+
+
+@router.get("/endpoints/{endpoint_id}/vms/{vm_name}/networks")
+def get_vm_networks(endpoint_id: int, vm_name: str, db: Session = Depends(get_db)):
+return VmwareController.get_vm_networks(endpoint_id, vm_name, db)
+
+@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/network")
+def change_vm_network(endpoint_id: int, vm_name: str, request: VmNetworkChange, db: Session = Depends(get_db)):
+return VmwareController.change_vm_network(endpoint_id, vm_name, request, db)
+
+@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/nic-connection")
+def set_vm_nic_connected(endpoint_id: int, vm_name: str, request: VmNicConnect, db: Session = Depends(get_db)):
+return VmwareController.set_vm_nic_connected(endpoint_id, vm_name, request, db)
+
+
+getVmNetworks(endpointId: number, vmName: string) {
+return this.http.get(
+`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/networks`
+);
+}
 
 changeVmNetwork(endpointId: number, vmName: string, networkName: string, nicKey: number) {
 return this.http.put(
@@ -117,8 +186,8 @@ return this.http.put(
 }
 
 
-vmNics: any[] = []; // all NICs on the VM
-availableNetworks: any[] = []; // host portgroups for the dropdown
+vmNics: any[] = [];
+availableNetworks: any[] = [];
 selectedNicKey: number | null = null;
 selectedNetwork: string | null = null;
 currentNetwork: string | null = null;
@@ -130,7 +199,7 @@ nicConnected: boolean = true;
 this.vmNics = res.nics || [];
 this.availableNetworks = res.networks || [];
 if (this.vmNics.length) {
-this.onNicSelect(this.vmNics[0].key); // preselect first NIC
+this.onNicSelect(this.vmNics[0].key);
 }
 this.cdr.detectChanges();
 });
@@ -145,7 +214,6 @@ this.selectedNetwork = nic.current_network;
 this.nicConnected = nic.connected;
 }
 }
-
 
 applyNetwork() {
 if (!this.manageVm || this.selectedNicKey === null) return;
@@ -173,7 +241,6 @@ this.nicConnected = newState;
 
 
 <div class="manage-section">
-<!-- NIC selector: only when more than one NIC -->
 <div *ngIf="vmNics.length > 1">
 <label style="display:block; margin-bottom:4px; font-weight:600;">Select NIC</label>
 <select [ngModel]="selectedNicKey" (ngModelChange)="onNicSelect($event)"
@@ -191,7 +258,8 @@ style="width:100%; margin-bottom:10px;">
 </option>
 </select>
 
-<button (click)="applyNetwork()" style="width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#2f6df6;">
+<button (click)="applyNetwork()"
+style="width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#2f6df6;">
 Change Network
 </button>
 
