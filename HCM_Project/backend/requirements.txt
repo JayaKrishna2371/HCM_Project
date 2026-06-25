@@ -1,21 +1,34 @@
-# vmware_service.py
-@staticmethod
-def get_templates(endpoint_id, db):
-service_instance = VmwareService._get_instance(endpoint_id, db) # match get_vms' helper name
-return VCenterClient().get_templates(service_instance)
-
-# vmware_controller.py (static method + route)
-@staticmethod
-def get_templates(endpoint_id, db):
-return VmwareService.get_templates(endpoint_id, db)
-
-@router.get("/endpoints/{endpoint_id}/templates")
-def get_templates(endpoint_id: int, db: Session = Depends(get_db)):
-return VmwareController.get_templates(endpoint_id, db)
-
-
-getTemplates(endpointId: number) {
-return this.http.get(
-`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/templates`
-);
+loadTemplates() {
+(this.vmwareService.getTemplates(this.endpointId) as any)
+.subscribe((res: any) => {
+this.templates = res || [];
+this.templateCount = this.templates.length;
+this.cdr.detectChanges();
+});
 }
+
+templates: any[] = [];
+templateCount: number = 0;
+
+
+
+<div *ngIf="selectedTab === 'templates'">
+<table class="inventory-table">
+<thead>
+<tr>
+<th>Name</th>
+<th>Guest OS</th>
+<th>CPU</th>
+<th>RAM</th>
+</tr>
+</thead>
+<tbody>
+<tr *ngFor="let t of templates">
+<td>{{ t.name }}</td>
+<td>{{ t.guest_os }}</td>
+<td>{{ t.cpu }}</td>
+<td>{{ (t.memory_mb / 1024) }} GB</td>
+</tr>
+</tbody>
+</table>
+</div>
