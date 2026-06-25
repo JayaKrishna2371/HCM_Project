@@ -1,34 +1,7 @@
-loadTemplates() {
-(this.vmwareService.getTemplates(this.endpointId) as any)
-.subscribe((res: any) => {
-this.templates = res || [];
-this.templateCount = this.templates.length;
-this.cdr.detectChanges();
-});
-}
-
-templates: any[] = [];
-templateCount: number = 0;
-
-
-
-<div *ngIf="selectedTab === 'templates'">
-<table class="inventory-table">
-<thead>
-<tr>
-<th>Name</th>
-<th>Guest OS</th>
-<th>CPU</th>
-<th>RAM</th>
-</tr>
-</thead>
-<tbody>
-<tr *ngFor="let t of templates">
-<td>{{ t.name }}</td>
-<td>{{ t.guest_os }}</td>
-<td>{{ t.cpu }}</td>
-<td>{{ (t.memory_mb / 1024) }} GB</td>
-</tr>
-</tbody>
-</table>
-</div>
+@staticmethod
+def get_templates(endpoint_id, db):
+endpoint = VmwareRepository.get_endpoint_by_id(endpoint_id, db)
+if not endpoint:
+raise HTTPException(status_code=404, detail="Endpoint not found")
+service_instance = VmwareService._get_service_instance(endpoint)
+return VCenterClient().get_templates(service_instance)
