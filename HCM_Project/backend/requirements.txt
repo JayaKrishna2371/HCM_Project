@@ -1,48 +1,5 @@
-# =====================================
-# VMware Template
-# =====================================
-
-class VmwareTemplate(Base):
-
-__tablename__ = "vmware_templates"
-
-id = Column(
-Integer,
-primary_key=True
-)
-
-endpoint_id = Column(
-Integer,
-nullable=False
-)
-
-name = Column(
-String,
-nullable=False
-)
-
-guest_os = Column(
-String,
-nullable=True
-)
-
-cpu_count = Column(
-Integer,
-nullable=True
-)
-
-memory_mb = Column(
-Integer,
-nullable=True
-)
-
-
 @staticmethod
-def save_templates(
-endpoint_id: int,
-templates: list,
-db: Session
-):
+def save_templates(endpoint_id: int, templates: list, db: Session):
 for t in templates:
 db.add(
 VmwareTemplate(
@@ -50,7 +7,8 @@ endpoint_id=endpoint_id,
 name=t.get("name"),
 guest_os=t.get("guest_os"),
 cpu_count=t.get("cpu"),
-memory_mb=t.get("memory_mb")
+memory_mb=t.get("memory_mb"),
+disk_gb=t.get("disk_gb"),
 )
 )
 db.commit()
@@ -70,17 +28,18 @@ db.query(VmwareTemplate)
 .all()
 )
 
+
 vms = client.get_vms(service_instance)
-templates = client.get_templates(service_instance) # add
+templates = client.get_templates(service_instance) # ADD
 
 VmwareRepository.clear_inventory(endpoint.id, db)
-VmwareRepository.clear_templates(endpoint.id, db) # add
+VmwareRepository.clear_templates(endpoint.id, db) # ADD
 
 VmwareRepository.save_datacenters(endpoint.id, datacenters, db)
 VmwareRepository.save_clusters(endpoint.id, clusters, db)
 VmwareRepository.save_hosts(endpoint.id, hosts, db)
 VmwareRepository.save_vms(endpoint.id, vms, db)
-VmwareRepository.save_templates(endpoint.id, templates, db) # add
+VmwareRepository.save_templates(endpoint.id, templates, db) # ADD
 
 
 @staticmethod
@@ -88,28 +47,4 @@ def get_templates(endpoint_id, db):
 return VmwareRepository.get_templates(endpoint_id, db)
 
 
-def get_templates(self, service_instance):
-content = service_instance.RetrieveContent()
-container = content.viewManager.CreateContainerView(
-content.rootFolder, [vim.VirtualMachine], True
-)
-templates = []
-for vm in container.view:
-if vm.config and vm.config.template:
-disk_gb = 0
-try:
-for device in vm.config.hardware.device:
-if hasattr(device, "capacityInKB"):
-disk_gb += device.capacityInKB / (1024 * 1024)
-except Exception:
-disk_gb = 0
-
-templates.append({
-"name": vm.name,
-"guest_os": vm.config.guestFullName,
-"cpu": vm.config.hardware.numCPU,
-"memory_mb": vm.config.hardware.memoryMB,
-"disk_gb": round(disk_gb, 2),
-})
-container.Destroy()
-return templates
+<td>{{ t.disk_gb }} GB</td>
