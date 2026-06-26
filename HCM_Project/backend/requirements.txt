@@ -86,3 +86,30 @@ VmwareRepository.save_templates(endpoint.id, templates, db) # add
 @staticmethod
 def get_templates(endpoint_id, db):
 return VmwareRepository.get_templates(endpoint_id, db)
+
+
+def get_templates(self, service_instance):
+content = service_instance.RetrieveContent()
+container = content.viewManager.CreateContainerView(
+content.rootFolder, [vim.VirtualMachine], True
+)
+templates = []
+for vm in container.view:
+if vm.config and vm.config.template:
+disk_gb = 0
+try:
+for device in vm.config.hardware.device:
+if hasattr(device, "capacityInKB"):
+disk_gb += device.capacityInKB / (1024 * 1024)
+except Exception:
+disk_gb = 0
+
+templates.append({
+"name": vm.name,
+"guest_os": vm.config.guestFullName,
+"cpu": vm.config.hardware.numCPU,
+"memory_mb": vm.config.hardware.memoryMB,
+"disk_gb": round(disk_gb, 2),
+})
+container.Destroy()
+return templates
