@@ -1,50 +1,69 @@
-@staticmethod
-def save_templates(endpoint_id: int, templates: list, db: Session):
-for t in templates:
-db.add(
-VmwareTemplate(
-endpoint_id=endpoint_id,
-name=t.get("name"),
-guest_os=t.get("guest_os"),
-cpu_count=t.get("cpu"),
-memory_mb=t.get("memory_mb"),
-disk_gb=t.get("disk_gb"),
-)
-)
-db.commit()
+def convert_template_to_vm(self, service_instance, template_name):
+vm = self.find_vm(service_instance, template_name)
+if not vm:
+return {"success": False, "message": "Template not found"}
+if not vm.config.template:
+return {"success": False, "message": "Not a template"}
 
-@staticmethod
-def clear_templates(endpoint_id: int, db: Session):
-db.query(VmwareTemplate).filter(
-VmwareTemplate.endpoint_id == endpoint_id
-).delete()
-db.commit()
-
-@staticmethod
-def get_templates(endpoint_id: int, db: Session):
-return (
-db.query(VmwareTemplate)
-.filter(VmwareTemplate.endpoint_id == endpoint_id)
-.all()
-)
+# find the resource pool from the template's host/cluster
+host = vm.runtime.host
+pool = host.parent.resourcePool # cluster's root pool
+task = vm.MarkAsVirtualMachine(pool=pool, host=host)
+self.wait_for_task(task)
+return {"success": True, "message": f"{template_name} converted to VM"}
 
 
-vms = client.get_vms(service_instance)
-templates = client.get_templates(service_instance) # ADD
+def convert_vm_to_template(self, service_instance, vm_name):
+vm = self.find_vm(service_instance, vm_name)
+if not vm:
+return {"success": False, "message": "VM not found"}
+if vm.config.template:
+return {"success": False, "message": "Already a template"}
+if vm.runtime.powerState != vim.VirtualMachinePowerState.poweredOff:
+return {"success": False, "message": "Power off the VM before converting to template"}
 
-VmwareRepository.clear_inventory(endpoint.id, db)
-VmwareRepository.clear_templates(endpoint.id, db) # ADD
+task = vm.MarkAsTemplate()
+self.wait_for_task(task)
+return {"success": True, "message": f"{vm_name} converted to template"}
 
-VmwareRepository.save_datacenters(endpoint.id, datacenters, db)
-VmwareRepository.save_clusters(endpoint.id, clusters, db)
-VmwareRepository.save_hosts(endpoint.id, hosts, db)
-VmwareRepository.save_vms(endpoint.id, vms, db)
-VmwareRepository.save_templates(endpoint.id, templates, db) # ADD
 
 
 @staticmethod
-def get_templates(endpoint_id, db):
-return VmwareRepository.get_templates(endpoint_id, db)
+def convert_template_to_vm(endpoint_id, template_name, db):
+endpoint = VmwareRepository.get_endpoint_by_id(endpoint_id, db)
+if not endpoint:
+raise HTTPException(status_code=404, detail="Endpoint not found")
+service_instance = VmwareService._get_service_instance(endpoint)
+return VCenterClient().convert_template_to_vm(service_instance, template_name)
+
+@staticmethod
+def convert_vm_to_template(endpoint_id, vm_name, db):
+endpoint = VmwareRepository.get_endpoint_by_id(endpoint_id, db)
+if not endpoint:
+raise HTTPException(status_code=404, detail="Endpoint not found")
+service_instance = VmwareService._get_service_instance(endpoint)
+return VCenterClient().convert_vm_to_template(service_instance, vm_name)
 
 
-<td>{{ t.disk_gb }} GB</td>
+@router.put("/endpoints/{endpoint_id}/templates/{template_name}/convert-to-vm")
+def convert_template_to_vm(endpoint_id: int, template_name: str, db: Session = Depends(get_db)):
+return VmwareService.convert_template_to_vm(endpoint_id, template_name, db)
+
+@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/convert-to-template")
+def convert_vm_to_template(endpoint_id: int, vm_name: str, db: Session = Depends(get_db)):
+return VmwareService.convert_vm_to_template(endpoint_id, vm_name, db)
+
+
+convertTemplateToVm(endpointId: number, templateName: string) {
+return this.http.put(
+`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/templates/${templateName}/convert-to-vm`,
+{}
+);
+}
+
+convertVmToTemplate(endpointId: number, vmName: string) {
+return this.http.put(
+`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/convert-to-template`,
+{}
+);
+}
