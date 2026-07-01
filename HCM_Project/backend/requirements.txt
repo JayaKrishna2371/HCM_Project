@@ -151,3 +151,28 @@ this.showToast('Discovery failed', 'error');
 style="opacity: {{ isDiscovering ? '0.6' : '1' }};">
 {{ isDiscovering ? 'Discovering...' : 'Discover' }}
 </button>
+
+
+
+
+
+private isDiscovering = false;
+
+triggerDiscovery() {
+this.isDiscovering = true;
+this.vmwareService.runDiscovery(this.endpointId).subscribe(
+(res: any) => {
+this.showToast('Discovery in progress...', 'success');
+setTimeout(() => {
+this.loadInventory();
+this.loadTemplates();
+this.isDiscovering = false;
+this.showToast('Discovery complete', 'success');
+}, 2000);
+},
+(err) => {
+this.isDiscovering = false;
+this.showToast('Discovery failed', 'error');
+}
+);
+}
