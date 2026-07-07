@@ -1,178 +1,66 @@
-def convert_template_to_vm(self, service_instance, template_name):
-vm = self.find_vm(service_instance, template_name)
-if not vm:
-return {"success": False, "message": "Template not found"}
-if not vm.config.template:
-return {"success": False, "message": "Not a template"}
+def get_vms(self, service_instance):
+content = service_instance.RetrieveContent()
+container = content.viewManager.CreateContainerView(
+content.rootFolder, [vim.VirtualMachine], True
+)
 
-# find the resource pool from the template's host/cluster
-host = vm.runtime.host
-pool = host.parent.resourcePool # cluster's root pool
-task = vm.MarkAsVirtualMachine(pool=pool, host=host)
-self.wait_for_task(task)
-return {"success": True, "message": f"{template_name} converted to VM"}
+# Use PropertyCollector for batch fetching (faster than per-VM calls)
+collector = content.propertyCollector
 
+filter_spec = vim.PropertyFilterSpec()
+filter_spec.propSet = [vim.PropertySpec(
+all=False,
+type=vim.VirtualMachine,
+pathSet=['config', 'runtime']
+)]
+filter_spec.objectSet = [vim.ObjectSpec(
+obj=container,
+skip=False
+)]
 
-def convert_vm_to_template(self, service_instance, vm_name):
-vm = self.find_vm(service_instance, vm_name)
-if not vm:
-return {"success": False, "message": "VM not found"}
-if vm.config.template:
-return {"success": False, "message": "Already a template"}
-if vm.runtime.powerState != vim.VirtualMachinePowerState.poweredOff:
-return {"success": False, "message": "Power off the VM before converting to template"}
+try:
+result = collector.RetrievePropertiesEx(
+[filter_spec],
+vim.RetrieveOptions()
+)
+except Exception:
+container.Destroy()
+return []
 
-task = vm.MarkAsTemplate()
-self.wait_for_task(task)
-return {"success": True, "message": f"{vm_name} converted to template"}
+vms = []
 
+if result and result.objects:
+for obj in result.objects:
+try:
+vm_props = {prop.name: prop.val for prop in obj.propSet}
+config = vm_props.get('config')
+runtime = vm_props.get('runtime')
 
+# Skip templates
+if not config or config.template:
+continue
 
-@staticmethod
-def convert_template_to_vm(endpoint_id, template_name, db):
-endpoint = VmwareRepository.get_endpoint_by_id(endpoint_id, db)
-if not endpoint:
-raise HTTPException(status_code=404, detail="Endpoint not found")
-service_instance = VmwareService._get_service_instance(endpoint)
-return VCenterClient().convert_template_to_vm(service_instance, template_name)
+# Calculate disk space
+disk_gb = 0
+try:
+if config.hardware and config.hardware.device:
+for device in config.hardware.device:
+if hasattr(device, "capacityInKB"):
+disk_gb += device.capacityInKB / (1024 * 1024)
+except Exception:
+disk_gb = 0
 
-@staticmethod
-def convert_vm_to_template(endpoint_id, vm_name, db):
-endpoint = VmwareRepository.get_endpoint_by_id(endpoint_id, db)
-if not endpoint:
-raise HTTPException(status_code=404, detail="Endpoint not found")
-service_instance = VmwareService._get_service_instance(endpoint)
-return VCenterClient().convert_vm_to_template(service_instance, vm_name)
+vms.append({
+"name": obj.obj.name,
+"power_state": str(runtime.powerState) if runtime else None,
+"cpu_count": config.hardware.numCPU if config.hardware else None,
+"memory_mb": config.hardware.memoryMB if config.hardware else None,
+"disk_gb": round(disk_gb, 2),
+"guest_os": config.guestFullName,
+"vm_uuid": config.uuid,
+})
+except Exception:
+continue
 
-
-@router.put("/endpoints/{endpoint_id}/templates/{template_name}/convert-to-vm")
-def convert_template_to_vm(endpoint_id: int, template_name: str, db: Session = Depends(get_db)):
-return VmwareService.convert_template_to_vm(endpoint_id, template_name, db)
-
-@router.put("/endpoints/{endpoint_id}/vms/{vm_name}/convert-to-template")
-def convert_vm_to_template(endpoint_id: int, vm_name: str, db: Session = Depends(get_db)):
-return VmwareService.convert_vm_to_template(endpoint_id, vm_name, db)
-
-
-convertTemplateToVm(endpointId: number, templateName: string) {
-return this.http.put(
-`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/templates/${templateName}/convert-to-vm`,
-{}
-);
-}
-
-convertVmToTemplate(endpointId: number, vmName: string) {
-return this.http.put(
-`http://localhost:8000/api/v1/vmware/endpoints/${endpointId}/vms/${vmName}/convert-to-template`,
-{}
-);
-}
-
-
-
-
-
-
-
-
-
-
-convertToVm(template: any) {
-this.handle(
-template,
-this.vmwareService.convertTemplateToVm(this.endpointId, template.name),
-'Converted to VM', 'Convert to VM failed'
-);
-}
-
-convertToTemplate() {
-if (!this.manageVm) return;
-this.handle(
-this.manageVm,
-this.vmwareService.convertVmToTemplate(this.endpointId, this.manageVm.name),
-'Converted to template', 'Convert to template failed'
-);
-this.closeManage();
-}
-
-
-<hr style="margin: 12px 0;" />
-
-<div class="manage-section">
-<h3 class="section-heading">Convert</h3>
-<p style="margin: 4px 0; font-size: 13px; color: #555;">
-Converting to a template makes this VM non-runnable until converted back. VM must be powered off.
-</p>
-<div class="manage-row">
-<button (click)="convertToTemplate()"
-style="width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#8e44ad;">
-Convert to Template
-</button>
-</div>
-</div>
-
-
-<th>Actions</th>
-
-
-<td>
-<button (click)="convertToVm(t)"
-style="padding:6px 12px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#2f6df6;">
-Convert to VM
-</button>
-</td>
-
-
-
-isDiscovering = false;
-
-triggerDiscovery() {
-this.isDiscovering = true;
-this.vmwareService.discover(this.endpointId).subscribe(
-(res) => {
-this.showToast('Discovery in progress...', 'info');
-setTimeout(() => {
-this.loadInventory();
-this.loadTemplates();
-this.isDiscovering = false;
-this.showToast('Discovery complete', 'success');
-}, 2000);
-},
-(err) => {
-this.isDiscovering = false;
-this.showToast('Discovery failed', 'error');
-}
-);
-}
-
-
-<button (click)="triggerDiscovery()"
-[disabled]="isDiscovering"
-style="opacity: {{ isDiscovering ? '0.6' : '1' }};">
-{{ isDiscovering ? 'Discovering...' : 'Discover' }}
-</button>
-
-
-
-
-
-private isDiscovering = false;
-
-triggerDiscovery() {
-this.isDiscovering = true;
-this.vmwareService.runDiscovery(this.endpointId).subscribe(
-(res: any) => {
-this.showToast('Discovery in progress...', 'success');
-setTimeout(() => {
-this.loadInventory();
-this.loadTemplates();
-this.isDiscovering = false;
-this.showToast('Discovery complete', 'success');
-}, 2000);
-},
-(err) => {
-this.isDiscovering = false;
-this.showToast('Discovery failed', 'error');
-}
-);
-}
+container.Destroy()
+return vms
