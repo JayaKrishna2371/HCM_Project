@@ -1,40 +1,26 @@
 def get_vms(self, service_instance):
 content = service_instance.RetrieveContent()
 container = content.viewManager.CreateContainerView(
-content.rootFolder, [vim.VirtualMachine], True
+content.rootFolder, [vim.Datacenter], True
 )
-
-# PropertyCollector batch fetch (much faster than per-VM loops)
-collector = content.propertyCollector
-
-filter_spec = vim.PropertyFilterSpec()
-filter_spec.propSet = [vim.PropertySpec(
-all=False,
-type=vim.VirtualMachine,
-pathSet=['config', 'runtime', 'parent']
-)]
-filter_spec.objectSet = [vim.ObjectSpec(
-obj=container,
-skip=False
-)]
-
-try:
-result = collector.RetrievePropertiesEx(
-[filter_spec],
-vim.RetrieveOptions()
-)
-except Exception:
-container.Destroy()
-return []
 
 vms = []
 
-if result and result.objects:
-for obj in result.objects:
 try:
-vm_props = {prop.name: prop.val for prop in obj.propSet}
-config = vm_props.get('config')
-runtime = vm_props.get('runtime')
+for datacenter in container.view:
+clusters = datacenter.hostFolder.childEntity
+for cluster in clusters:
+hosts = cluster.host
+
+for host in hosts:
+if not hasattr(host, 'vm') or not host.vm:
+continue
+
+# Batch-fetch properties for all VMs on this host
+for vm in host.vm:
+try:
+config = vm.config
+runtime = vm.runtime
 
 # Skip templates
 if not config or config.template:
@@ -48,19 +34,22 @@ if hasattr(device, "capacityInKB"):
 disk_gb += device.capacityInKB / (1024 * 1024)
 
 vms.append({
-"name": obj.obj.name,
+"name": vm.name,
 "power_state": str(runtime.powerState) if runtime else None,
 "cpu_count": config.hardware.numCPU if config.hardware else None,
 "memory_mb": config.hardware.memoryMB if config.hardware else None,
 "disk_gb": round(disk_gb, 2),
 "guest_os": config.guestFullName,
 "vm_uuid": config.uuid,
-"host_name": None, # PropertyCollector doesn't return host directly
-"cluster_name": None,
-"datacenter_name": None,
+"host_name": host.name,
+"cluster_name": cluster.name,
+"datacenter_name": datacenter.name,
 })
-except Exception:
+except Exception as e:
 continue
-
+except Exception as e:
+pass
+finally:
 container.Destroy()
+
 return vms
