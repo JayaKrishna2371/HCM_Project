@@ -1,90 +1,397 @@
-def convert_vm_to_template(self, service_instance, vm_name):
-vm = self.find_vm(service_instance, vm_name)
-if not vm:
-return {"success": False, "message": "VM not found"}
-if vm.config.template:
-return {"success": False, "message": "Already a template"}
-if vm.runtime.powerState != vim.VirtualMachinePowerState.poweredOff:
-return {"success": False, "message": "Power off the VM before converting to template"}
-
-try:
-task = vm.MarkAsTemplate()
-if task:
-self.wait_for_task(task)
-except Exception as e:
-# Conversion may have succeeded even if task tracking failed
-return {"success": True, "message": f"{vm_name} converted to template (task tracking failed, but conversion completed)"}
-
-return {"success": True, "message": f"{vm_name} converted to template"}
+fastapi==0.115.0
+uvicorn==0.30.6
+ollama==0.3.3
+requests==2.32.3
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.5.2
 
 
 
-def convert_template_to_vm(self, service_instance, template_name):
-vm = self.find_vm(service_instance, template_name)
-if not vm:
-return {"success": False, "message": "Template not found"}
-if not vm.config.template:
-return {"success": False, "message": "Not a template"}
+OLLAMA_URL=http://ollama:11434
+OLLAMA_MODEL=llama3.1
+VMWARE_SERVICE_URL=http://vmware-service:8000
 
-try:
-host = vm.runtime.host
-pool = host.parent.resourcePool
-task = vm.MarkAsVirtualMachine(pool=pool, host=host)
-if task:
-self.wait_for_task(task)
-except Exception as e:
-# Conversion may have succeeded even if task tracking failed
-return {"success": True, "message": f"{template_name} converted to VM (task tracking failed, but conversion completed)"}
 
-return {"success": True, "message": f"{template_name} converted to VM"}
+from pydantic_settings import BaseSettings
 
+class Settings(BaseSettings):
+OLLAMA_URL: str = "http://ollama:11434"
+OLLAMA_MODEL: str = "llama3.1"
+VMWARE_SERVICE_URL: str = "http://vmware-service:8000"
+
+class Config:
+env_file = ".env"
+extra = "allow"
+
+settings = Settings()
 
 
 
-convertToVm(template: any) {
-this.handle(
-template,
-this.vmwareService.convertTemplateToVm(this.endpointId, template.name),
-'Converted to VM', // success message (shows green)
-'Convert to VM failed' // failure message (shows red)
-);
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+
+class ChatMessage(BaseModel):
+role: str # "user" or "assistant"
+content: str
+
+class ChatRequest(BaseModel):
+message: str
+history: Optional[List[ChatMessage]] = []
+
+class ChatResponse(BaseModel):
+reply: str
+
+
+
+import requests
+from app.core.config import settings
+
+BASE = f"{settings.VMWARE_SERVICE_URL}/api/v1/vmware"
+
+
+def _headers(auth_token: str) -> dict:
+return {"Authorization": f"Bearer {auth_token}"}
+
+
+def power_on_vm(endpoint_id: int, vm_name: str, auth_token: str) -> dict:
+resp = requests.post(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}/power-on",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def power_off_vm(endpoint_id: int, vm_name: str, auth_token: str) -> dict:
+resp = requests.post(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}/power-off",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def reboot_vm(endpoint_id: int, vm_name: str, auth_token: str) -> dict:
+resp = requests.post(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}/reboot",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def delete_vm(endpoint_id: int, vm_name: str, auth_token: str) -> dict:
+resp = requests.delete(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def reconfigure_vm_resources(endpoint_id: int, vm_name: str, auth_token: str,
+cpu_count: int = None, memory_mb: int = None) -> dict:
+payload = {}
+if cpu_count is not None:
+payload["cpu_count"] = cpu_count
+if memory_mb is not None:
+payload["memory_mb"] = memory_mb
+resp = requests.post(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}/resources",
+json=payload,
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def add_disk(endpoint_id: int, vm_name: str, auth_token: str, size_gb: int) -> dict:
+resp = requests.post(
+f"{BASE}/endpoints/{endpoint_id}/vms/{vm_name}/disks",
+json={"size_gb": size_gb},
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def list_vms(endpoint_id: int, auth_token: str) -> list:
+resp = requests.get(
+f"{BASE}/endpoints/{endpoint_id}/vms",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+def list_templates(endpoint_id: int, auth_token: str) -> list:
+resp = requests.get(
+f"{BASE}/endpoints/{endpoint_id}/templates",
+headers=_headers(auth_token)
+)
+return resp.json()
+
+
+TOOL_FUNCTIONS = {
+"power_on_vm": power_on_vm,
+"power_off_vm": power_off_vm,
+"reboot_vm": reboot_vm,
+"delete_vm": delete_vm,
+"reconfigure_vm_resources": reconfigure_vm_resources,
+"add_disk": add_disk,
+"list_vms": list_vms,
+"list_templates": list_templates,
 }
 
-convertToTemplate() {
-if (!this.manageVm) return;
-this.handle(
-this.manageVm,
-this.vmwareService.convertVmToTemplate(this.endpointId, this.manageVm.name),
-'Converted to template', // success message (shows green)
-'Convert to template failed' // failure message (shows red)
-);
-this.closeManage();
+
+
+TOOLS = [
+{
+"type": "function",
+"function": {
+"name": "power_on_vm",
+"description": "Power on a virtual machine.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer", "description": "vCenter endpoint ID"},
+"vm_name": {"type": "string", "description": "Name of the VM"}
+},
+"required": ["endpoint_id", "vm_name"]
 }
+}
+},
+{
+"type": "function",
+"function": {
+"name": "power_off_vm",
+"description": "Power off a virtual machine.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"},
+"vm_name": {"type": "string"}
+},
+"required": ["endpoint_id", "vm_name"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "reboot_vm",
+"description": "Reboot/restart a virtual machine.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"},
+"vm_name": {"type": "string"}
+},
+"required": ["endpoint_id", "vm_name"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "delete_vm",
+"description": "Permanently delete a VM. Destructive action — must be confirmed by the user first.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"},
+"vm_name": {"type": "string"}
+},
+"required": ["endpoint_id", "vm_name"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "reconfigure_vm_resources",
+"description": "Change a VM's CPU count and/or RAM (MB).",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"},
+"vm_name": {"type": "string"},
+"cpu_count": {"type": "integer"},
+"memory_mb": {"type": "integer"}
+},
+"required": ["endpoint_id", "vm_name"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "add_disk",
+"description": "Add a new disk to a VM with a given size in GB.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"},
+"vm_name": {"type": "string"},
+"size_gb": {"type": "integer"}
+},
+"required": ["endpoint_id", "vm_name", "size_gb"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "list_vms",
+"description": "List all VMs discovered for a vCenter endpoint.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"}
+},
+"required": ["endpoint_id"]
+}
+}
+},
+{
+"type": "function",
+"function": {
+"name": "list_templates",
+"description": "List all templates for a vCenter endpoint.",
+"parameters": {
+"type": "object",
+"properties": {
+"endpoint_id": {"type": "integer"}
+},
+"required": ["endpoint_id"]
+}
+}
+}
+]
+
+
+import ollama
+from app.core.config import settings
+from app.mcp_tools.tool_definitions import TOOLS
+from app.mcp_tools.vmware_tools import TOOL_FUNCTIONS
+
+DESTRUCTIVE_TOOLS = {"delete_vm", "power_off_vm"}
+
+client = ollama.Client(host=settings.OLLAMA_URL)
+
+
+def handle_chat(user_message: str, history: list, auth_token: str) -> str:
+messages = [{"role": h.role, "content": h.content} for h in history]
+messages.append({"role": "user", "content": user_message})
+
+response = client.chat(
+model=settings.OLLAMA_MODEL,
+messages=messages,
+tools=TOOLS
+)
+
+assistant_message = response["message"]
+tool_calls = assistant_message.get("tool_calls")
+
+if not tool_calls:
+return assistant_message["content"]
+
+messages.append(assistant_message)
+
+for call in tool_calls:
+tool_name = call["function"]["name"]
+args = call["function"]["arguments"]
+
+if tool_name in DESTRUCTIVE_TOOLS:
+vm_name = args.get("vm_name", "this VM")
+return (f"⚠️ You asked me to run '{tool_name}' on '{vm_name}'. "
+f"This is a destructive action. Please confirm by replying "
+f"'yes, {tool_name} {vm_name}' to proceed.")
+
+func = TOOL_FUNCTIONS.get(tool_name)
+if not func:
+result = {"error": f"Unknown tool: {tool_name}"}
+else:
+try:
+result = func(**args, auth_token=auth_token)
+except Exception as e:
+result = {"error": str(e)}
+
+messages.append({"role": "tool", "content": str(result)})
+
+final_response = client.chat(
+model=settings.OLLAMA_MODEL,
+messages=messages,
+tools=TOOLS
+)
+
+return final_response["message"]["content"]
 
 
 
-<hr style="margin: 12px 0;" />
+from fastapi import APIRouter, Header, HTTPException
+from app.schemas.chat_schema import ChatRequest, ChatResponse
+from app.services.chat_service import handle_chat
 
-<div class="manage-section">
-<h3 class="section-heading">Convert</h3>
-<p style="margin: 4px 0; font-size: 13px; color: #555;">
-Converting to a template makes this VM non-runnable until converted back. VM must be powered off.
-</p>
-<div class="manage-row">
-<button (click)="convertToTemplate()"
-style="width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#8e44ad;">
-Convert to Template
-</button>
-</div>
-</div>
+router = APIRouter(prefix="/api/v1/chat", tags=["AI Chat"])
 
 
-<th>Actions</th>
+@router.post("/", response_model=ChatResponse)
+async def chat(req: ChatRequest, authorization: str = Header(None)):
+if not authorization or not authorization.startswith("Bearer "):
+raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+auth_token = authorization.replace("Bearer ", "")
+reply = handle_chat(req.message, req.history, auth_token=auth_token)
+return ChatResponse(reply=reply)
 
 
-<td>
-<button (click)="convertToVm(t)"
-style="padding:6px 12px; border:none; border-radius:4px; cursor:pointer; color:#fff; background:#2f6df6;">
-Convert to VM
-</button>
-</td>
+
+from fastapi import FastAPI
+from app.controllers.chat_controller import router as chat_router
+
+app = FastAPI(title="AI Agent Service")
+
+app.include_router(chat_router)
+
+
+@app.get("/health")
+async def health():
+return {"status": "ok"}
+
+
+import uvicorn
+
+if __name__ == "__main__":
+uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "run.py"]
+
+
+ollama:
+image: ollama/ollama
+container_name: ollama
+volumes:
+- ollama_data:/root/.ollama
+ports:
+- "11434:11434"
+
+ai-agent-service:
+build: ./services/ai-agent-service
+container_name: ai-agent-service
+environment:
+- OLLAMA_URL=http://ollama:11434
+- OLLAMA_MODEL=llama3.1
+- VMWARE_SERVICE_URL=http://vmware-service:8000
+depends_on:
+- ollama
+- vmware-service
+ports:
+- "8005:8000"
+
+volumes:
+ollama_data:
