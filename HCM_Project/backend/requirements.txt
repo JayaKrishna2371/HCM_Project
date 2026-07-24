@@ -395,3 +395,8 @@ ports:
 
 volumes:
 ollama_data:
+
+
+
+
+docker exec -it ollama sh -c "mv /root/.ollama/models/models/blobs/* /root/.ollama/models/blobs/ 2>/dev/null; mv /root/.ollama/models/models/manifests/* /root/.ollama/models/manifests/ 2>/dev/null; rm -rf /root/.ollama/models/models"
